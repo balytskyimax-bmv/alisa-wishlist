@@ -5,7 +5,7 @@ import os
 import urllib.parse
 from datetime import datetime
 
-PORT = 8000
+PORT = int(os.environ.get("PORT", 8000))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "data", "gifts.json")
 PUBLIC_DIR = os.path.join(BASE_DIR, "public")
