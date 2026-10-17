@@ -1,0 +1,92 @@
+/* Floating decorative bubbles in background */
+.bubble {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  z-index: -1;
+  animation: float 20s infinite alternate ease-in-out;
+}
+
+.bubble-1 {
+  width: 450px;
+  height: 450px;
+  top: -100px;
+  left: -100px;
+  background: radial-gradient(circle, rgba(254, 215, 226, 0.7) 0%, rgba(255, 235, 240, 0) 70%);
+}
+
+.bubble-2 {
+  width: 500px;
+  height: 500px;
+  top: 30%;
+  right: -150px;
+  background: radial-gradient(circle, rgba(254, 243, 199, 0.6) 0%, rgba(254, 249, 195, 0) 70%);
+  animation-duration: 25s;
+}
+
+.bubble-3 {
+  width: 400px;
+  height: 400px;
+  bottom: 10%;
+  left: 10%;
+  background: radial-gradient(circle, rgba(230, 247, 238, 0.7) 0%, rgba(240, 253, 244, 0) 70%);
+  animation-duration: 22s;
+}
+
+@keyframes float {
+  0% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(30px) scale(1.05); }
+  100% { transform: translateY(-20px) scale(0.95); }
+}
+
+@keyframes bounceSlow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.animate-bounce-slow {
+  animation: bounceSlow 3s infinite ease-in-out;
+}
+
+/* Filter Tab active state */
+.filter-tab.active {
+  background-color: white;
+  color: #d92361;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+/* Card image transitions */
+.gift-card {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+}
+
+.gift-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 28px -8px rgba(217, 35, 97, 0.12), 0 8px 12px -6px rgba(0, 0, 0, 0.04);
+}
+
+/* Photo switch indicator dots */
+.photo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  transition: all 0.2s ease;
+}
+
+.photo-dot.active {
+  width: 20px;
+  border-radius: 4px;
+  background-color: white;
+}
+
+/* Modal animation */
+#reserve-modal.active {
+  display: flex !important;
+  opacity: 1 !important;
+}
+
+#reserve-modal.active #modal-box {
+  transform: scale(1) !important;
+}
