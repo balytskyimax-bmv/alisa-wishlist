@@ -1,92 +1,111 @@
-/* Floating decorative bubbles in background */
+/* Refined, elegant, neutral soft-pink & white aesthetic */
+body {
+  background-color: #FAF8F9;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(254, 242, 244, 0.8) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(253, 235, 240, 0.6) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(255, 245, 247, 0.9) 0px, transparent 50%);
+  background-attachment: fixed;
+}
+
+/* Floating soft light ambient spheres */
 .bubble {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
+  filter: blur(100px);
   z-index: -1;
-  animation: float 20s infinite alternate ease-in-out;
+  animation: float 25s infinite alternate ease-in-out;
 }
 
 .bubble-1 {
-  width: 450px;
-  height: 450px;
-  top: -100px;
-  left: -100px;
-  background: radial-gradient(circle, rgba(254, 215, 226, 0.7) 0%, rgba(255, 235, 240, 0) 70%);
+  width: 500px;
+  height: 500px;
+  top: -80px;
+  left: -80px;
+  background: radial-gradient(circle, rgba(254, 215, 226, 0.45) 0%, rgba(255, 240, 245, 0) 70%);
 }
 
 .bubble-2 {
-  width: 500px;
-  height: 500px;
-  top: 30%;
-  right: -150px;
-  background: radial-gradient(circle, rgba(254, 243, 199, 0.6) 0%, rgba(254, 249, 195, 0) 70%);
-  animation-duration: 25s;
+  width: 550px;
+  height: 550px;
+  top: 35%;
+  right: -100px;
+  background: radial-gradient(circle, rgba(255, 228, 236, 0.4) 0%, rgba(255, 245, 248, 0) 70%);
+  animation-duration: 30s;
 }
 
 .bubble-3 {
-  width: 400px;
-  height: 400px;
-  bottom: 10%;
-  left: 10%;
-  background: radial-gradient(circle, rgba(230, 247, 238, 0.7) 0%, rgba(240, 253, 244, 0) 70%);
-  animation-duration: 22s;
+  width: 450px;
+  height: 450px;
+  bottom: 5%;
+  left: 15%;
+  background: radial-gradient(circle, rgba(254, 215, 226, 0.35) 0%, rgba(255, 240, 245, 0) 70%);
+  animation-duration: 26s;
 }
 
 @keyframes float {
   0% { transform: translateY(0px) scale(1); }
-  50% { transform: translateY(30px) scale(1.05); }
-  100% { transform: translateY(-20px) scale(0.95); }
+  50% { transform: translateY(25px) scale(1.03); }
+  100% { transform: translateY(-15px) scale(0.97); }
 }
 
 @keyframes bounceSlow {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
+  50% { transform: translateY(-4px); }
 }
 
 .animate-bounce-slow {
-  animation: bounceSlow 3s infinite ease-in-out;
+  animation: bounceSlow 3.5s infinite ease-in-out;
 }
 
 /* Filter Tab active state */
-.filter-tab.active {
-  background-color: white;
-  color: #d92361;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+.filter-tab {
+  color: #6B7280;
 }
 
-/* Card image transitions */
+.filter-tab.active {
+  background-color: #FFFFFF;
+  color: #BE185D;
+  box-shadow: 0 2px 6px -1px rgba(190, 24, 93, 0.08), 0 1px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+/* Gift Cards */
 .gift-card {
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .gift-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 14px 28px -8px rgba(217, 35, 97, 0.12), 0 8px 12px -6px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 12px 28px -6px rgba(225, 29, 72, 0.09), 0 4px 10px -2px rgba(0, 0, 0, 0.03);
 }
 
 /* Photo switch indicator dots */
 .photo-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background-color: rgba(255, 255, 255, 0.7);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.25);
   transition: all 0.2s ease;
 }
 
 .photo-dot.active {
-  width: 20px;
+  width: 18px;
   border-radius: 4px;
-  background-color: white;
+  background-color: #FFFFFF;
 }
 
-/* Modal animation */
-#reserve-modal.active {
+/* Modals */
+.modal-overlay {
+  transition: opacity 0.2s ease;
+}
+
+.modal-overlay.active {
   display: flex !important;
   opacity: 1 !important;
 }
 
-#reserve-modal.active #modal-box {
+.modal-overlay.active .modal-content {
   transform: scale(1) !important;
 }

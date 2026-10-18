@@ -6,7 +6,7 @@
   <title>Вішліст подарунків — Алісоньці 1 рочок! 🎂✨</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@500;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@500;600;700&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   <link rel="stylesheet" href="/styles.css">
@@ -16,24 +16,21 @@
         extend: {
           colors: {
             brand: {
-              50: '#fff5f7',
-              100: '#ffe8ee',
-              200: '#ffd0de',
-              300: '#ffa8c2',
-              400: '#f8729f',
-              500: '#ee437d',
-              600: '#d92361',
-              700: '#b6144c',
-              800: '#971442',
-              900: '#7e153b',
+              50: '#FDF2F4',
+              100: '#FCE7EC',
+              200: '#F9CFDA',
+              300: '#F5A7BC',
+              400: '#EE7395',
+              500: '#E14474',
+              600: '#CB2459',
+              700: '#AB1845',
+              800: '#8E173C',
+              900: '#771835',
             },
-            pastel: {
-              cream: '#FDFBF7',
-              blush: '#FBEAEB',
-              peach: '#FEEFE8',
-              lavender: '#F3EEFF',
-              sage: '#EEF7F2',
-              gold: '#FDF2D9',
+            roseaccent: {
+              light: '#FFF0F3',
+              border: '#FDE2E7',
+              pill: '#FFF5F7',
             }
           },
           fontFamily: {
@@ -45,84 +42,99 @@
     }
   </script>
 </head>
-<body class="bg-pastel-cream text-gray-800 font-body min-h-screen flex flex-col antialiased selection:bg-brand-200 selection:text-brand-900">
+<body class="text-gray-800 font-body min-h-screen flex flex-col antialiased selection:bg-brand-100 selection:text-brand-900">
 
-  <!-- Background decorative elements -->
-  <div class="fixed inset-0 pointer-events-none overflow-hidden z-0 opacity-40">
+  <!-- Floating soft pink background lighting -->
+  <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
     <div class="bubble bubble-1"></div>
     <div class="bubble bubble-2"></div>
     <div class="bubble bubble-3"></div>
   </div>
 
+  <!-- Top bar with Parent Dashboard Access -->
+  <div class="relative z-20 w-full max-w-6xl mx-auto px-4 pt-4 flex justify-between items-center">
+    <div class="flex items-center gap-2 text-xs font-semibold text-gray-500">
+      <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+      <span>Сайт активний</span>
+    </div>
+
+    <!-- Parent View Button -->
+    <button onclick="openParentModal()" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/90 hover:bg-white text-gray-700 hover:text-brand-600 text-xs font-bold border border-rose-100 shadow-sm transition">
+      <span>📋</span>
+      <span>Зведення для батьків</span>
+      <span id="parent-reserved-badge" class="ml-1 px-1.5 py-0.2 rounded-full bg-brand-50 text-brand-600 font-bold text-[10px]">1</span>
+    </button>
+  </div>
+
   <!-- Header / Hero Section -->
-  <header class="relative z-10 pt-10 pb-8 px-4 sm:px-6 lg:px-8 text-center max-w-5xl mx-auto">
-    <!-- Festive Badge -->
-    <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-100 text-brand-700 text-sm font-bold shadow-sm mb-4 animate-bounce-slow">
-      <span>🎈</span>
-      <span>Перший День Народження</span>
+  <header class="relative z-10 pt-6 pb-6 px-4 sm:px-6 lg:px-8 text-center max-w-4xl mx-auto">
+    <!-- Neutral Festive Badge -->
+    <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/90 border border-brand-100 text-brand-700 text-xs sm:text-sm font-bold shadow-sm mb-4 animate-bounce-slow">
+      <span>🌸</span>
+      <span>1 Рочок • День Народження</span>
       <span>✨</span>
     </div>
 
     <!-- Main Title -->
-    <h1 class="font-heading text-3xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-4 tracking-tight leading-tight">
-      Вішліст для <span class="text-brand-500 underline decoration-brand-200 decoration-wavy decoration-2">Алісоньки</span> 💖
+    <h1 class="font-heading text-3xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-3 tracking-tight leading-tight">
+      Вішліст для <span class="text-brand-600 underline decoration-brand-200 decoration-wavy decoration-2">Алісоньки</span> 💖
     </h1>
 
-    <p class="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto mb-6 leading-relaxed">
-      Наша маленька принцеса святкує свій перший рочок! Ми зібрали речі, які будуть корисними для її розвитку, ігор та затишку.
+    <p class="text-base sm:text-lg text-gray-600 max-w-xl mx-auto mb-6 leading-relaxed">
+      Наша крихітка святкує свій перший день народження! Ми зібрали тут корисні речі для її розвитку, ігор та затишку.
     </p>
 
     <!-- Warm Guest Instruction Note -->
-    <div class="bg-white/90 backdrop-blur-md border border-brand-100 rounded-2xl p-5 shadow-sm max-w-3xl mx-auto text-sm sm:text-base text-gray-700 text-left sm:text-center space-y-2 mb-8">
-      <p class="font-semibold text-brand-700 flex items-center justify-center gap-2">
-        <span>💡</span> Як користуватися вішлістом:
+    <div class="bg-white/95 backdrop-blur-md border border-rose-100 rounded-2xl p-4 sm:p-5 shadow-sm max-w-2xl mx-auto text-xs sm:text-sm text-gray-600 text-left sm:text-center space-y-1.5 mb-6">
+      <p class="font-bold text-brand-700 flex items-center justify-center gap-1.5">
+        <span>💡</span> Як зарезервувати подарунок:
       </p>
       <p>
-        Оберіть подарунок, що вам подобається, та натисніть <span class="font-bold text-brand-600">«Зарезервувати»</span>. Введіть ваше ім'я — і статус подарунка одразу зміниться на «Зарезервовано», щоб інші гості знали, що він уже зайнятий, та сюрпризи не повторювалися!
+        Оберіть те, що хочете подарувати, та натисніть <span class="font-bold text-brand-600">«Зарезервувати»</span>. Вкажіть ваше ім'я — і статус подарунка одразу зміниться на «Зарезервовано», щоб інші гості бачили це і подарунки не повторювалися!
       </p>
     </div>
 
     <!-- Quick Stats -->
-    <div class="grid grid-cols-3 gap-3 sm:gap-6 max-w-xl mx-auto">
-      <div class="bg-white rounded-2xl p-3 sm:p-4 shadow-sm border border-gray-100 flex flex-col items-center">
-        <span class="text-2xl sm:text-3xl font-extrabold text-gray-800" id="stat-total">14</span>
-        <span class="text-xs sm:text-sm text-gray-500 font-medium">Всього подарунків</span>
+    <div class="grid grid-cols-3 gap-3 sm:gap-5 max-w-lg mx-auto">
+      <div class="bg-white/90 rounded-2xl p-3 shadow-sm border border-rose-100 flex flex-col items-center">
+        <span class="text-xl sm:text-2xl font-extrabold text-gray-800" id="stat-total">17</span>
+        <span class="text-[11px] sm:text-xs text-gray-500 font-medium">Всього бажань</span>
       </div>
-      <div class="bg-white rounded-2xl p-3 sm:p-4 shadow-sm border border-emerald-100 flex flex-col items-center">
-        <span class="text-2xl sm:text-3xl font-extrabold text-emerald-600" id="stat-available">--</span>
-        <span class="text-xs sm:text-sm text-gray-500 font-medium">✨ Вільні</span>
+      <div class="bg-white/90 rounded-2xl p-3 shadow-sm border border-rose-100 flex flex-col items-center">
+        <span class="text-xl sm:text-2xl font-extrabold text-emerald-600" id="stat-available">--</span>
+        <span class="text-[11px] sm:text-xs text-gray-500 font-medium">✨ Вільні</span>
       </div>
-      <div class="bg-white rounded-2xl p-3 sm:p-4 shadow-sm border border-brand-100 flex flex-col items-center">
-        <span class="text-2xl sm:text-3xl font-extrabold text-brand-500" id="stat-reserved">--</span>
-        <span class="text-xs sm:text-sm text-gray-500 font-medium">🎁 Заброньовано</span>
+      <div class="bg-white/90 rounded-2xl p-3 shadow-sm border border-rose-100 flex flex-col items-center">
+        <span class="text-xl sm:text-2xl font-extrabold text-brand-600" id="stat-reserved">--</span>
+        <span class="text-[11px] sm:text-xs text-gray-500 font-medium">🎁 Заброньовано</span>
       </div>
     </div>
   </header>
 
   <!-- Filter & Controls Toolbar -->
   <section class="relative z-10 sticky top-3 max-w-6xl mx-auto w-full px-4 mb-8">
-    <div class="bg-white/95 backdrop-blur-md rounded-2xl p-3 sm:p-4 shadow-md border border-gray-100 flex flex-col md:flex-row gap-3 items-center justify-between">
+    <div class="bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-sm border border-rose-100 flex flex-col md:flex-row gap-3 items-center justify-between">
       
       <!-- Status Tabs -->
-      <div class="flex items-center gap-1.5 p-1 bg-gray-100/80 rounded-xl w-full sm:w-auto overflow-x-auto">
-        <button onclick="setStatusFilter('all')" id="tab-all" class="filter-tab active px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all whitespace-nowrap">
-          Всі (14)
+      <div class="flex items-center gap-1.5 p-1 bg-gray-50/90 rounded-xl w-full sm:w-auto overflow-x-auto border border-gray-100">
+        <button onclick="setStatusFilter('all')" id="tab-all" class="filter-tab active px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap">
+          Всі (17)
         </button>
-        <button onclick="setStatusFilter('free')" id="tab-free" class="filter-tab px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all whitespace-nowrap text-emerald-700 hover:bg-white/60">
+        <button onclick="setStatusFilter('free')" id="tab-free" class="filter-tab px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap hover:bg-white/60">
           ✨ Вільні
         </button>
-        <button onclick="setStatusFilter('reserved')" id="tab-reserved" class="filter-tab px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all whitespace-nowrap text-brand-700 hover:bg-white/60">
-          🎁 Зарезервовані
+        <button onclick="setStatusFilter('reserved')" id="tab-reserved" class="filter-tab px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap hover:bg-white/60">
+          🎁 Заброньовані
         </button>
       </div>
 
       <!-- Category Filter Dropdown & Search -->
       <div class="flex items-center gap-2 w-full md:w-auto">
-        <select id="category-filter" onchange="setCategoryFilter(this.value)" class="w-full md:w-48 text-xs sm:text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-400">
+        <select id="category-filter" onchange="setCategoryFilter(this.value)" class="w-full md:w-48 text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-400">
           <option value="all">Усі категорії</option>
         </select>
         <div class="relative w-full md:w-56">
-          <input type="text" id="search-input" oninput="setSearchQuery(this.value)" placeholder="Пошук..." class="w-full text-xs sm:text-sm border border-gray-200 rounded-xl pl-8 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400">
+          <input type="text" id="search-input" oninput="setSearchQuery(this.value)" placeholder="Пошук подарунка..." class="w-full text-xs border border-gray-200 rounded-xl pl-8 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400">
           <span class="absolute left-2.5 top-2.5 text-gray-400 text-xs">🔍</span>
         </div>
       </div>
@@ -137,10 +149,10 @@
     </div>
 
     <!-- Empty State -->
-    <div id="empty-state" class="hidden text-center py-16 bg-white/70 rounded-3xl border border-dashed border-gray-200 p-8 max-w-md mx-auto">
+    <div id="empty-state" class="hidden text-center py-16 bg-white/80 rounded-3xl border border-dashed border-gray-200 p-8 max-w-md mx-auto">
       <div class="text-4xl mb-3">🔍</div>
-      <h3 class="text-lg font-bold text-gray-800 mb-1">Нічого не знайдено</h3>
-      <p class="text-sm text-gray-500 mb-4">Спробуйте скинути фільтри або змінити пошуковий запит.</p>
+      <h3 class="text-base font-bold text-gray-800 mb-1">Нічого не знайдено</h3>
+      <p class="text-xs text-gray-500 mb-4">Спробуйте скинути фільтри або змінити пошуковий запит.</p>
       <button onclick="resetFilters()" class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-bold transition">
         Скинути фільтри
       </button>
@@ -148,11 +160,11 @@
   </main>
 
   <!-- Reservation Modal -->
-  <div id="reserve-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
-    <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-brand-100 transform scale-95 transition-transform duration-200 relative overflow-hidden" id="modal-box">
+  <div id="reserve-modal" class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm hidden opacity-0">
+    <div class="modal-content bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-rose-100 transform scale-95 transition-transform duration-200 relative overflow-hidden" id="modal-box">
       
-      <!-- Top decorative ribbon -->
-      <div class="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-brand-300 via-brand-500 to-pastel-peach"></div>
+      <!-- Top decorative delicate rose line -->
+      <div class="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-brand-300 via-brand-500 to-rose-200"></div>
 
       <!-- Close Button -->
       <button onclick="closeReserveModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 p-1.5 rounded-full hover:bg-gray-100 transition">
@@ -160,11 +172,11 @@
       </button>
 
       <div class="text-center mb-5">
-        <div class="w-12 h-12 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center mx-auto mb-2 text-2xl">
+        <div class="w-11 h-11 bg-rose-50 text-brand-600 rounded-full flex items-center justify-center mx-auto mb-2 text-xl border border-rose-100">
           🎁
         </div>
-        <h3 class="text-xl font-heading font-bold text-gray-900" id="modal-gift-title">Зарезервувати подарунок</h3>
-        <p class="text-xs sm:text-sm text-gray-500" id="modal-gift-price"></p>
+        <h3 class="text-lg font-heading font-bold text-gray-900" id="modal-gift-title">Зарезервувати подарунок</h3>
+        <p class="text-xs text-brand-600 font-bold mt-0.5" id="modal-gift-price"></p>
       </div>
 
       <!-- Form -->
@@ -172,29 +184,94 @@
         <input type="hidden" id="reserve-gift-id">
 
         <div>
-          <label class="block text-xs sm:text-sm font-bold text-gray-700 mb-1">
+          <label class="block text-xs font-bold text-gray-700 mb-1">
             Ваше ім'я або сім'я <span class="text-brand-500">*</span>
           </label>
-          <input type="text" id="reserve-name" required placeholder="наприклад: Хрещена мама, Оля та Максим" class="w-full text-sm border border-gray-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-brand-400 focus:outline-none">
-          <span class="text-[11px] text-gray-400 mt-1 block">Це ім'я буде видно іншим гостям на картці товару</span>
+          <input type="text" id="reserve-name" required placeholder="наприклад: Хрещена мама, Оля та Сергій" class="w-full text-xs sm:text-sm border border-gray-200 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-brand-400 focus:outline-none">
+          <span class="text-[11px] text-gray-400 mt-1 block">Це ім'я з'явиться на картці, щоб подарунок не повторився</span>
         </div>
 
         <div>
-          <label class="block text-xs sm:text-sm font-bold text-gray-700 mb-1">
+          <label class="block text-xs font-bold text-gray-700 mb-1">
             Тепле побажання для Алісоньки (опціонально)
           </label>
-          <textarea id="reserve-wishes" rows="2" placeholder="Кілька теплих слів від серця..." class="w-full text-sm border border-gray-300 rounded-xl px-3.5 py-2 focus:ring-2 focus:ring-brand-400 focus:outline-none resize-none"></textarea>
+          <textarea id="reserve-wishes" rows="2" placeholder="Кілька теплих слів від душі..." class="w-full text-xs sm:text-sm border border-gray-200 rounded-xl px-3.5 py-2 focus:ring-2 focus:ring-brand-400 focus:outline-none resize-none"></textarea>
         </div>
 
         <div class="pt-2 flex gap-3">
-          <button type="button" onclick="closeReserveModal()" class="flex-1 py-2.5 px-4 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-bold transition">
+          <button type="button" onclick="closeReserveModal()" class="flex-1 py-2.5 px-4 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs sm:text-sm font-bold transition">
             Скасувати
           </button>
-          <button type="submit" id="reserve-submit-btn" class="flex-1 py-2.5 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold shadow-md hover:shadow-lg transition">
+          <button type="submit" id="reserve-submit-btn" class="flex-1 py-2.5 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs sm:text-sm font-bold shadow-sm hover:shadow transition">
             Підтвердити бронь ✨
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Parent Summary Dashboard Modal -->
+  <div id="parent-modal" class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm hidden opacity-0">
+    <div class="modal-content bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-rose-100 transform scale-95 transition-transform duration-200 relative max-h-[85vh] flex flex-col">
+      
+      <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+        <div>
+          <h3 class="text-lg font-heading font-bold text-gray-900 flex items-center gap-2">
+            <span>📋</span> Зведення подарунків для батьків
+          </h3>
+          <p class="text-xs text-gray-500">Тут видно все, що вже зарезервували гості</p>
+        </div>
+        <button onclick="closeParentModal()" class="text-gray-400 hover:text-gray-600 p-1.5 rounded-full hover:bg-gray-100 transition">✕</button>
+      </div>
+
+      <div class="overflow-y-auto flex-1 py-4 divide-y divide-gray-100" id="parent-list-container">
+        <!-- Injected dynamically -->
+      </div>
+
+      <div class="pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-500">
+        <span id="parent-stats-text">Зарезервовано: 0</span>
+        <button onclick="closeParentModal()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 font-bold rounded-xl text-gray-700 transition">
+          Закрити
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Crypto Info Modal -->
+  <div id="crypto-modal" class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm hidden opacity-0">
+    <div class="modal-content bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-rose-100 transform scale-95 transition-transform duration-200 relative text-center">
+      <button onclick="closeCryptoModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 p-1.5 rounded-full hover:bg-gray-100 transition">✕</button>
+      
+      <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl border border-amber-100">
+        🪙
+      </div>
+      <h3 class="text-lg font-heading font-bold text-gray-900 mb-1">Криптовалютний подарунок 🚀</h3>
+      <p class="text-xs text-gray-600 mb-4 leading-relaxed">
+        Ви можете поповнити перший дитячий інвестиційний гаманець Алісоньки в USDT (TRC-20 / BEP-20), Bitcoin або Ethereum!
+      </p>
+
+      <div class="bg-gray-50 rounded-2xl p-3 border border-gray-200 text-left mb-4 space-y-2 text-xs">
+        <div>
+          <span class="font-bold text-gray-700 block text-[11px]">USDT (TRC-20):</span>
+          <code class="block bg-white p-2 rounded-lg border border-gray-200 text-[11px] text-gray-600 break-all select-all font-mono">
+            TYDzmBq2J6oE7dFhXwYdE98gV4wQZ8sH1K
+          </code>
+        </div>
+        <div>
+          <span class="font-bold text-gray-700 block text-[11px]">USDT / ETH / BNB (BEP-20 / ERC-20):</span>
+          <code class="block bg-white p-2 rounded-lg border border-gray-200 text-[11px] text-gray-600 break-all select-all font-mono">
+            0x71C...AlisaBirthday2026...3f9
+          </code>
+        </div>
+      </div>
+
+      <p class="text-[11px] text-gray-400 mb-4">
+        Або напишіть батькам у месенджері, щоб отримати прямий реквізит чи QR-код.
+      </p>
+
+      <button onclick="openReserveModal('crypto-gift'); closeCryptoModal();" class="w-full py-2.5 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs shadow-sm transition">
+        Зафіксувати мій криптоподарунок ✨
+      </button>
     </div>
   </div>
 
@@ -203,14 +280,14 @@
     <div class="relative max-w-3xl max-h-[90vh] p-2" onclick="event.stopPropagation()">
       <button onclick="closeLightbox()" class="absolute -top-10 right-0 text-white hover:text-gray-300 text-2xl font-bold">✕</button>
       <img id="lightbox-img" src="" alt="Перегляд фото" class="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl">
-      <p id="lightbox-caption" class="text-center text-white/90 text-sm mt-3 font-medium"></p>
+      <p id="lightbox-caption" class="text-center text-white/90 text-xs sm:text-sm mt-3 font-medium"></p>
     </div>
   </div>
 
   <!-- Footer -->
-  <footer class="relative z-10 border-t border-gray-100 bg-white/60 py-8 px-4 text-center text-xs sm:text-sm text-gray-500">
-    <p class="mb-1">Створено з любов'ю до 1-го дня народження Алісоньки 🌸</p>
-    <p>Дякуємо, що ви з нами у цей особливий святковий день! 💖</p>
+  <footer class="relative z-10 border-t border-rose-100 bg-white/70 py-8 px-4 text-center text-xs text-gray-500">
+    <p class="mb-1 font-medium">Створено з любов'ю до 1-го дня народження Алісоньки 🌸</p>
+    <p class="text-[11px] text-gray-400">Дякуємо кожному, хто робить це свято теплим та незабутнім! 💖</p>
   </footer>
 
   <!-- Scripts -->
