@@ -48,15 +48,31 @@
     "wishes": ""
   },
   {
-    "id": "futbolka-zirochka",
-    "title": "Футболка «Зірочка» від Hey Musya",
-    "category": "Одяг",
-    "price": "980 грн",
-    "url": "https://heymusya.com/products/futbolka-zirochka",
-    "note": "🌟 Потрібний розмір: 76–86 см",
+    "id": "konges-slojd-music",
+    "title": "Konges Sløjd Набір музичних інструментів дитячий Music sets FSC (Бежевий)",
+    "category": "Розвиваючі іграшки",
+    "price": "2 999 грн",
+    "url": "https://answear.ua/p/konges-slojd-nabir-muzychnykh-instrumentiv-dytyachyj-music-sets-fsc-bezhevyj-ks107371-1908126",
+    "note": "🎵 Екологічні дерев'яні інструменти (бубон, маракаси, ксилофон) у стильній валізці",
     "images": [
-      "/images/futbolka-zirochka_1.webp",
-      "/images/futbolka-zirochka_2.webp"
+      "/images/konges-slojd-music_1.jpg",
+      "/images/konges-slojd-music_2.jpg"
+    ],
+    "reserved": false,
+    "reservedBy": "",
+    "reservedAt": null,
+    "wishes": ""
+  },
+  {
+    "id": "knyhy-bodo",
+    "title": "Комплект 7 книг Бодьо для розвитку мовлення та навичок (1–4 роки) | Марта Галевська-Кустра",
+    "category": "Книги та розвиток",
+    "price": "1 610 грн",
+    "url": "https://librika.net/komplekt-7-knyh-bodo-dlia-rozvytku-movlennia-ta-navychok-dytyny-14-roky-marta-halevska-kustra/",
+    "note": "📖 Повний набір із 7 інтерактивних книг-картонок для запуску мовлення дитини (акція)",
+    "images": [
+      "/images/knyhy-bodo_1.jpg",
+      "/images/knyhy-bodo_2.jpg"
     ],
     "reserved": false,
     "reservedBy": "",
