@@ -206,8 +206,8 @@ function renderGiftCard(gift) {
             ${isCrypto ? `
               <button 
                 onclick="openCryptoModal()" 
-                class="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800">
-                <span>🪙 Інструкція та адреса гаманця</span>
+                class="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 hover:text-brand-800">
+                <span>🪙 Як подарувати (звернутися до тата Максима)</span>
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
               </button>
             ` : `
