@@ -17,6 +17,30 @@ async function fetchGifts() {
     if (!res.ok) throw new Error('Помилка завантаження даних');
     allGifts = await res.json();
     
+    // Cross-verify with MantleDB directly as a safety fallback
+    try {
+      const cloudRes = await fetch('https://mantledb.sh/v2/alisa-bday-wishlist-2026-v1/reservations', { cache: 'no-store' });
+      if (cloudRes.ok) {
+        const cloudData = await cloudRes.json();
+        if (cloudData && typeof cloudData === 'object') {
+          let updated = false;
+          allGifts.forEach(g => {
+            if (cloudData[g.id] && cloudData[g.id].reserved) {
+              if (!g.reserved || g.reservedBy !== cloudData[g.id].reservedBy) {
+                g.reserved = true;
+                g.reservedBy = cloudData[g.id].reservedBy || g.reservedBy;
+                g.wishes = cloudData[g.id].wishes || g.wishes;
+                g.reservedAt = cloudData[g.id].reservedAt || g.reservedAt;
+                updated = true;
+              }
+            }
+          });
+        }
+      }
+    } catch (cErr) {
+      // Background safety check optional
+    }
+
     allGifts.forEach(g => {
       if (!(g.id in currentImageIndices)) {
         currentImageIndices[g.id] = 0;
@@ -24,6 +48,7 @@ async function fetchGifts() {
     });
 
     populateCategories();
+    populateAdminGiftSelect();
     renderStats();
     renderGifts();
   } catch (err) {
@@ -430,6 +455,7 @@ function openParentModal() {
     `).join('');
   }
 
+  populateAdminGiftSelect();
   modal.classList.remove('hidden');
   setTimeout(() => modal.classList.add('active'), 10);
 }
@@ -513,7 +539,138 @@ async function unreserveGift(giftId, giftTitle) {
     allGifts = data.gifts;
     renderStats();
     renderGifts();
+    populateAdminGiftSelect();
   } catch (err) {
     alert('Не вдалося скасувати бронь.');
   }
 }
+
+// Populate Admin Gift Select in Parent Modal
+function populateAdminGiftSelect() {
+  const select = document.getElementById('admin-gift-select');
+  if (!select) return;
+  const currentVal = select.value;
+
+  select.innerHTML = '<option value="">Оберіть подарунок зі списку...</option>';
+  allGifts.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    const statusText = g.reserved ? `🔴 Зайнято (${g.reservedBy})` : `🟢 Вільно`;
+    opt.textContent = `${statusText} — ${g.title} (${g.price})`;
+    select.appendChild(opt);
+  });
+  if (currentVal) select.value = currentVal;
+}
+
+// Submit Admin Manual Reservation
+async function submitAdminReservation() {
+  const giftSelect = document.getElementById('admin-gift-select');
+  const nameInput = document.getElementById('admin-guest-name');
+  const wishesInput = document.getElementById('admin-wishes');
+
+  const giftId = giftSelect ? giftSelect.value : '';
+  const name = nameInput ? nameInput.value.trim() : '';
+  const wishes = wishesInput ? wishesInput.value.trim() : '';
+
+  if (!giftId) {
+    alert('Будь ласка, оберіть подарунок зі списку.');
+    return;
+  }
+  if (!name) {
+    alert("Будь ласка, вкажіть ім'я гостя.");
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/admin/reserve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: giftId, name, wishes })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || 'Помилка при збереженні');
+      return;
+    }
+
+    allGifts = data.gifts;
+    renderStats();
+    renderGifts();
+    openParentModal(); // refresh list
+    populateAdminGiftSelect();
+
+    if (nameInput) nameInput.value = '';
+    if (wishesInput) wishesInput.value = '';
+    alert('✅ Бронювання успішно збережено в хмарній базі!');
+  } catch (err) {
+    alert('Не вдалося зберегти бронювання. Перевірте з\'єднання.');
+  }
+}
+
+// Sync directly from cloud
+async function syncFromCloud() {
+  const btn = document.getElementById('btn-cloud-sync');
+  if (btn) btn.innerHTML = '<span>⏳</span> Оновлення...';
+
+  try {
+    const res = await fetch('/api/sync');
+    const data = await res.json();
+    if (res.ok && data.gifts) {
+      allGifts = data.gifts;
+      renderStats();
+      renderGifts();
+      openParentModal();
+      populateAdminGiftSelect();
+      alert('✅ Дані успішно синхронізовано з хмарою!');
+    } else {
+      alert('Помилка синхронізації з хмарою.');
+    }
+  } catch (err) {
+    alert('Не вдалося оновити з хмари.');
+  } finally {
+    if (btn) btn.innerHTML = '<span>🔄</span> Оновити з хмари';
+  }
+}
+
+// Export Reservations to Text File
+function exportReservations() {
+  const reservedGifts = allGifts.filter(g => g.reserved);
+  const now = new Date().toLocaleString('uk-UA');
+
+  let text = `===================================================\n`;
+  text += `🎂 ВІШЛІСТ АЛІСОНЬКИ (1 РОЧОК) — ЗВЕДЕННЯ БРОНЮВАНЬ\n`;
+  text += `Згенеровано: ${now}\n`;
+  text += `Зарезервовано подарунків: ${reservedGifts.length} з ${allGifts.length}\n`;
+  text += `===================================================\n\n`;
+
+  if (reservedGifts.length === 0) {
+    text += `Поки що немає заброньованих подарунків.\n`;
+  } else {
+    reservedGifts.forEach((g, idx) => {
+      text += `${idx + 1}. ${g.title}\n`;
+      text += `   Ціна: ${g.price}\n`;
+      text += `   Категорія: ${g.category}\n`;
+      text += `   Посилання: ${g.url}\n`;
+      text += `   👤 Зарезервував(ла): ${g.reservedBy}\n`;
+      if (g.wishes) text += `   💌 Побажання: «${g.wishes}»\n`;
+      if (g.reservedAt) text += `   ⏰ Час броні: ${g.reservedAt}\n`;
+      text += `---------------------------------------------------\n`;
+    });
+  }
+
+  text += `\nВільні подарунки (${allGifts.length - reservedGifts.length}):\n`;
+  allGifts.filter(g => !g.reserved).forEach((g, idx) => {
+    text += `${idx + 1}. ${g.title} (${g.price}) — ${g.url}\n`;
+  });
+
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Alisa_Wishlist_Reservations_${new Date().toISOString().slice(0, 10)}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+

@@ -219,17 +219,53 @@
           <h3 class="text-lg font-heading font-bold text-gray-900 flex items-center gap-2">
             <span>📋</span> Зведення подарунків для батьків
           </h3>
-          <p class="text-xs text-gray-500">Тут видно все, що вже зарезервували гості</p>
+          <p class="text-xs text-gray-500">Повний список заброньованих подарунків (дані надійно збережено в хмарі)</p>
         </div>
         <button onclick="closeParentModal()" class="text-gray-400 hover:text-gray-600 p-1.5 rounded-full hover:bg-gray-100 transition">✕</button>
       </div>
 
-      <div class="overflow-y-auto flex-1 py-4 divide-y divide-gray-100" id="parent-list-container">
+      <!-- Quick Action Toolbar -->
+      <div class="py-2.5 px-3 bg-rose-50/50 rounded-2xl border border-rose-100 flex flex-wrap items-center justify-between gap-2 mt-3 text-xs">
+        <span class="text-gray-600 font-medium">⚡ Швидкі дії:</span>
+        <div class="flex items-center gap-2">
+          <button onclick="exportReservations()" class="px-2.5 py-1 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 font-semibold rounded-lg shadow-2xs transition flex items-center gap-1">
+            <span>📥</span> Завантажити копію (.txt)
+          </button>
+          <button onclick="syncFromCloud()" id="btn-cloud-sync" class="px-2.5 py-1 bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-700 font-semibold rounded-lg transition flex items-center gap-1">
+            <span>🔄</span> Оновити з хмари
+          </button>
+        </div>
+      </div>
+
+      <!-- Admin Manual Reservation Box -->
+      <div class="mt-3 p-3.5 bg-gray-50 rounded-2xl border border-gray-200/70">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+            <span>✍️</span> Внести / відновити бронювання вручну:
+          </span>
+          <span class="text-[10px] text-gray-400">для тата і мами</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <select id="admin-gift-select" class="text-xs border border-gray-300 rounded-xl px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400">
+            <option value="">Оберіть подарунок...</option>
+          </select>
+          <input type="text" id="admin-guest-name" placeholder="Ім'я гостя (наприклад: Оля)" class="text-xs border border-gray-300 rounded-xl px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-400">
+          <div class="flex gap-1.5">
+            <input type="text" id="admin-wishes" placeholder="Побажання (опціонально)" class="text-xs border border-gray-300 rounded-xl px-2.5 py-2 bg-white flex-1 focus:outline-none focus:ring-1 focus:ring-brand-400">
+            <button onclick="submitAdminReservation()" class="px-3 py-2 bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs rounded-xl shrink-0 transition shadow-2xs">
+              Зберегти
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reservations List -->
+      <div class="overflow-y-auto flex-1 py-3 divide-y divide-gray-100" id="parent-list-container">
         <!-- Injected dynamically -->
       </div>
 
-      <div class="pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-500">
-        <span id="parent-stats-text">Зарезервовано: 0</span>
+      <div class="pt-3 border-t border-gray-100 flex justify-between items-center text-xs text-gray-500">
+        <span id="parent-stats-text" class="font-semibold text-gray-700">Зарезервовано: 0</span>
         <button onclick="closeParentModal()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 font-bold rounded-xl text-gray-700 transition">
           Закрити
         </button>
