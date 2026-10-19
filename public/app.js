@@ -33,6 +33,12 @@ async function fetchGifts() {
                 g.reservedAt = cloudData[g.id].reservedAt || g.reservedAt;
                 updated = true;
               }
+            } else if (g.reserved && (!cloudData[g.id] || !cloudData[g.id].reserved)) {
+              g.reserved = false;
+              g.reservedBy = '';
+              g.wishes = '';
+              g.reservedAt = null;
+              updated = true;
             }
           });
         }

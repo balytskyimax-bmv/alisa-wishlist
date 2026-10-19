@@ -124,6 +124,11 @@ def sync_reservations_into_gifts(gifts, remote_res):
             g["reservedBy"] = r.get("reservedBy", "") if g["reserved"] else ""
             g["wishes"] = r.get("wishes", "") if g["reserved"] else ""
             g["reservedAt"] = r.get("reservedAt", None) if g["reserved"] else None
+        else:
+            g["reserved"] = False
+            g["reservedBy"] = ""
+            g["wishes"] = ""
+            g["reservedAt"] = None
     return gifts
 
 def load_gifts(force_sync=False):
