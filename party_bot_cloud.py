@@ -169,32 +169,89 @@ def _fetch_cloud_state() -> Optional[Dict[str, Any]]:
     return None
 
 
+_cloud_push_lock = threading.Lock()
+_welcomed_user_keys = set()  # (chat_id, user_id) deduplication so a guest is never greeted twice
+
+
+def _merge_states(base: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Atomically merges two state dicts so no quiz answer or RSVP is ever lost
+    even under high concurrency or across restarts.
+    """
+    merged = _default_state()
+    merged["settings"].update(base.get("settings", {}))
+    merged["settings"].update(incoming.get("settings", {}))
+    merged["settings"]["dress_code"] = DEFAULT_SETTINGS["dress_code"]
+    merged["settings"]["full_invitation_text"] = DEFAULT_SETTINGS["full_invitation_text"]
+    if "Уточнюється" in merged["settings"].get("event_date", ""):
+        merged["settings"]["event_date"] = DEFAULT_SETTINGS["event_date"]
+        merged["settings"]["event_time"] = DEFAULT_SETTINGS["event_time"]
+        merged["settings"]["location_name"] = DEFAULT_SETTINGS["location_name"]
+        merged["settings"]["location_url"] = DEFAULT_SETTINGS["location_url"]
+
+    # Stickers: keep non-empty list
+    merged["stickers"] = base.get("stickers") or incoming.get("stickers") or []
+
+    # RSVP: keep newest timestamp per user_id
+    rsvp_out = dict(incoming.get("rsvp", {}))
+    for uid, b_entry in base.get("rsvp", {}).items():
+        inc_entry = rsvp_out.get(uid)
+        if not inc_entry or b_entry.get("ts", 0) >= inc_entry.get("ts", 0):
+            rsvp_out[uid] = b_entry
+    merged["rsvp"] = rsvp_out
+
+    # Quiz answers: union of all answered questions per user_id (unless explicitly reset)
+    if base.get("quiz_reset_ts", 0) > incoming.get("quiz_reset_ts", 0):
+        merged["quiz_reset_ts"] = base["quiz_reset_ts"]
+        q_out = copy_dict(base.get("quiz_answers", {}))
+    else:
+        merged["quiz_reset_ts"] = incoming.get("quiz_reset_ts", 0)
+        q_out = copy_dict(incoming.get("quiz_answers", {}))
+        for uid, b_u in base.get("quiz_answers", {}).items():
+            if uid not in q_out:
+                q_out[uid] = copy_dict(b_u)
+            else:
+                q_out[uid]["name"] = b_u.get("name") or q_out[uid].get("name", "Гість")
+                q_out[uid]["username"] = b_u.get("username") or q_out[uid].get("username", "")
+                ans_dest = q_out[uid].setdefault("answers", {})
+                for qid, a_val in b_u.get("answers", {}).items():
+                    if qid not in ans_dest:
+                        ans_dest[qid] = a_val
+    merged["quiz_answers"] = q_out
+    return merged
+
+
+def copy_dict(d: Any) -> Any:
+    return json.loads(json.dumps(d))
+
+
 def _push_cloud_state_async(state_copy: Dict[str, Any]):
     def _worker():
-        payload = json.dumps(state_copy, ensure_ascii=False).encode("utf-8")
-        for url, headers in [
-            (
-                MANTLE_BOT_URL,
-                {
-                    "Content-Type": "application/json",
-                    "X-Mantle-Key": MANTLE_KEY,
-                    "User-Agent": "AlisaPartyBot/1.0",
-                },
-            ),
-            (
-                KVDB_BOT_URL,
-                {
-                    "Content-Type": "application/json",
-                    "User-Agent": "AlisaPartyBot/1.0",
-                },
-            ),
-        ]:
-            try:
-                req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
-                with urllib.request.urlopen(req, timeout=6):
-                    pass
-            except Exception as e:
-                print(f"[BOT CLOUD WARN] Failed pushing state to {url}: {e}", flush=True)
+        with _cloud_push_lock:
+            payload = json.dumps(state_copy, ensure_ascii=False).encode("utf-8")
+            for url, headers in [
+                (
+                    MANTLE_BOT_URL,
+                    {
+                        "Content-Type": "application/json",
+                        "X-Mantle-Key": MANTLE_KEY,
+                        "User-Agent": "AlisaPartyBot/1.0",
+                    },
+                ),
+                (
+                    KVDB_BOT_URL,
+                    {
+                        "Content-Type": "application/json",
+                        "User-Agent": "AlisaPartyBot/1.0",
+                    },
+                ),
+            ]:
+                try:
+                    req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+                    with urllib.request.urlopen(req, timeout=6):
+                        pass
+                except Exception as e:
+                    print(f"[BOT CLOUD WARN] Failed pushing state to {url}: {e}", flush=True)
 
     threading.Thread(target=_worker, daemon=True).start()
 
@@ -203,31 +260,22 @@ def get_state(force_sync: bool = False) -> Dict[str, Any]:
     global _cached_state, _last_cloud_sync
     with _state_lock:
         now = time.time()
-        if _cached_state is None or (force_sync and now - _last_cloud_sync > 2.0):
+        if _cached_state is None:
+            local_st = _default_state()
+            if os.path.exists(LOCAL_STATE_FILE):
+                try:
+                    with open(LOCAL_STATE_FILE, "r", encoding="utf-8") as f:
+                        local_st = json.load(f)
+                except Exception:
+                    pass
+            remote = _fetch_cloud_state()
+            _cached_state = _merge_states(local_st, remote or _default_state())
+            _last_cloud_sync = now
+        elif force_sync and now - _last_cloud_sync > 10.0:
             remote = _fetch_cloud_state()
             if remote:
-                _cached_state = remote
-                _last_cloud_sync = now
-            elif _cached_state is None:
-                if os.path.exists(LOCAL_STATE_FILE):
-                    try:
-                        with open(LOCAL_STATE_FILE, "r", encoding="utf-8") as f:
-                            _cached_state = json.load(f)
-                    except Exception:
-                        _cached_state = _default_state()
-                else:
-                    _cached_state = _default_state()
-
-            merged_settings = dict(DEFAULT_SETTINGS)
-            merged_settings.update(_cached_state.get("settings", {}))
-            merged_settings["dress_code"] = DEFAULT_SETTINGS["dress_code"]
-            merged_settings["full_invitation_text"] = DEFAULT_SETTINGS["full_invitation_text"]
-            if "Уточнюється" in merged_settings.get("event_date", ""):
-                merged_settings["event_date"] = DEFAULT_SETTINGS["event_date"]
-                merged_settings["event_time"] = DEFAULT_SETTINGS["event_time"]
-                merged_settings["location_name"] = DEFAULT_SETTINGS["location_name"]
-                merged_settings["location_url"] = DEFAULT_SETTINGS["location_url"]
-            _cached_state["settings"] = merged_settings
+                _cached_state = _merge_states(_cached_state, remote)
+            _last_cloud_sync = now
         return _cached_state
 
 
@@ -235,7 +283,7 @@ def save_state():
     with _state_lock:
         if _cached_state is None:
             return
-        state_copy = json.loads(json.dumps(_cached_state))
+        state_copy = copy_dict(_cached_state)
         try:
             os.makedirs(os.path.dirname(LOCAL_STATE_FILE), exist_ok=True)
             with open(LOCAL_STATE_FILE, "w", encoding="utf-8") as f:
@@ -448,7 +496,7 @@ def build_rsvp_kb() -> Dict[str, Any]:
     }
 
 
-def build_quiz_kb(question_id: int) -> Dict[str, Any]:
+def build_quiz_kb(question_id: int, is_private: bool = False) -> Dict[str, Any]:
     q_obj = next((q for q in QUIZ_QUESTIONS if q["id"] == question_id), QUIZ_QUESTIONS[0])
     rows = []
     for idx, opt_text in enumerate(q_obj["options"]):
@@ -460,6 +508,9 @@ def build_quiz_kb(question_id: int) -> Dict[str, Any]:
         label = f"🔸{qid}" if qid == q_obj["id"] else f"{qid}"
         nav_row.append({"text": label, "callback_data": f"quiz:view:{qid}"})
     rows.append(nav_row)
+
+    if not is_private:
+        rows.append([{"text": "📱 Пройти в особистому чаті (без спойлерів)", "url": "https://t.me/AlisaBirthdaybbot?start=quiz"}])
 
     rows.append(
         [
@@ -613,6 +664,25 @@ def format_leaderboard(state: Dict[str, Any]) -> str:
 
 # --- Update Processing ---
 
+def _queue_guest_welcome(chat_id: int, user_obj: Dict[str, Any]):
+    if user_obj.get("is_bot"):
+        return
+    uid = user_obj.get("id")
+    key = (chat_id, uid)
+    with _welcome_lock:
+        if key in _welcomed_user_keys:
+            return
+        _welcomed_user_keys.add(key)
+        fname = escape(user_obj.get("first_name") or "Гість")
+        mention = f'<a href="tg://user?id={uid}">{fname}</a>'
+        _welcome_buffers.setdefault(chat_id, []).append(mention)
+        if chat_id not in _welcome_timers:
+            t = threading.Timer(1.5, _flush_welcome_group, args=[chat_id])
+            t.daemon = True
+            _welcome_timers[chat_id] = t
+            t.start()
+
+
 def _flush_welcome_group(chat_id: int):
     with _welcome_lock:
         mentions = _welcome_buffers.pop(chat_id, [])
@@ -678,6 +748,17 @@ def handle_update(update: Dict[str, Any]):
                 new_status = mcm.get("new_chat_member", {}).get("status", "")
                 if old_status in ("left", "kicked") and new_status in ("member", "administrator"):
                     _send_group_initial_invite(chat.get("id"))
+        elif "chat_member" in update:
+            cm = update["chat_member"]
+            chat = cm.get("chat", {})
+            if chat.get("type") in ("group", "supergroup"):
+                old_status = cm.get("old_chat_member", {}).get("status", "left")
+                new_member = cm.get("new_chat_member", {})
+                new_status = new_member.get("status", "")
+                if old_status in ("left", "kicked") and new_status in ("member", "administrator"):
+                    u = new_member.get("user", {})
+                    if u and not u.get("is_bot"):
+                        _queue_guest_welcome(chat.get("id"), u)
     except Exception as e:
         print(f"[BOT ERROR] handle_update exception: {e}", flush=True)
 
@@ -695,27 +776,20 @@ def _handle_message(msg: Dict[str, Any]):
     new_members = msg.get("new_chat_members", [])
     if new_members or msg.get("group_chat_created") or msg.get("supergroup_chat_created"):
         bot_was_added = bool(msg.get("group_chat_created") or msg.get("supergroup_chat_created"))
-        mentions = []
+        human_users = []
         for u in new_members:
             if u.get("is_bot"):
                 if u.get("id") == 9158824262 or "alisabirthday" in (u.get("username") or "").lower():
                     bot_was_added = True
                 continue
-            fname = escape(u.get("first_name") or "Гість")
-            mentions.append(f'<a href="tg://user?id={u.get("id")}">{fname}</a>')
+            human_users.append(u)
 
-        if bot_was_added and not mentions:
+        if bot_was_added and not human_users:
             _send_group_initial_invite(chat_id)
             return
 
-        if mentions:
-            with _welcome_lock:
-                _welcome_buffers.setdefault(chat_id, []).extend(mentions)
-                if chat_id not in _welcome_timers:
-                    t = threading.Timer(1.5, _flush_welcome_group, args=[chat_id])
-                    t.daemon = True
-                    _welcome_timers[chat_id] = t
-                    t.start()
+        for u in human_users:
+            _queue_guest_welcome(chat_id, u)
         return
 
     text = (msg.get("text") or "").strip()
@@ -739,6 +813,24 @@ def _handle_message(msg: Dict[str, Any]):
             print(f"[BOT WARN] Sticker pack publish skipped: {e}", flush=True)
 
     if cmd in ("/start", "/menu"):
+        if arg.lower() == "quiz":
+            q_obj = QUIZ_QUESTIONS[0]
+            txt = (
+                f"👶 <b>Святкова вікторина про Алісу!</b> (Питання 1 із {len(QUIZ_QUESTIONS)})\n\n"
+                f"❓ <b>{q_obj['question']}</b>\n\n"
+                f"<i>Обирай правильний варіант нижче! Усі твої бали автоматично додаються у спільний рейтинг гостей 🏆</i>"
+            )
+            tg_api(
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": txt,
+                    "parse_mode": "HTML",
+                    "reply_markup": build_quiz_kb(1, is_private=is_private),
+                },
+            )
+            return
+
         reply_text = format_main_menu(settings, is_private=is_admin_private)
         kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=is_admin_private)
         tg_api(
@@ -802,19 +894,24 @@ def _handle_message(msg: Dict[str, Any]):
             },
         )
     elif cmd == "/set_date" and arg and str(user_id) == str(ADMIN_ID):
-        settings["event_date"] = arg
+        with _state_lock:
+            settings["event_date"] = arg
         save_state()
         tg_api("sendMessage", {"chat_id": chat_id, "text": f"✅ Дату оновлено: <b>{escape(arg)}</b>", "parse_mode": "HTML"})
     elif cmd == "/set_time" and arg and str(user_id) == str(ADMIN_ID):
-        settings["event_time"] = arg
+        with _state_lock:
+            settings["event_time"] = arg
         save_state()
         tg_api("sendMessage", {"chat_id": chat_id, "text": f"✅ Час оновлено: <b>{escape(arg)}</b>", "parse_mode": "HTML"})
     elif cmd == "/set_location" and arg and str(user_id) == str(ADMIN_ID):
-        settings["location_name"] = arg
+        with _state_lock:
+            settings["location_name"] = arg
         save_state()
         tg_api("sendMessage", {"chat_id": chat_id, "text": f"✅ Локацію оновлено: <b>{escape(arg)}</b>", "parse_mode": "HTML"})
     elif cmd == "/reset_quiz" and str(user_id) == str(ADMIN_ID):
-        state["quiz_answers"] = {}
+        with _state_lock:
+            state["quiz_answers"] = {}
+            state["quiz_reset_ts"] = time.time()
         save_state()
         tg_api("sendMessage", {"chat_id": chat_id, "text": "🔄 Усі тестові бали вікторини очищено!", "parse_mode": "HTML"})
 
@@ -903,12 +1000,13 @@ def _handle_callback(cb: Dict[str, Any]):
 
     elif data.startswith("rsvp:"):
         status = data.split(":")[1]
-        state.setdefault("rsvp", {})[user_id] = {
-            "name": full_name,
-            "username": username,
-            "status": status,
-            "ts": time.time(),
-        }
+        with _state_lock:
+            state.setdefault("rsvp", {})[user_id] = {
+                "name": full_name,
+                "username": username,
+                "status": status,
+                "ts": time.time(),
+            }
         save_state()
         _safe_edit(chat_id, message_id, format_rsvp(state), build_rsvp_kb())
         toast = {
@@ -931,7 +1029,7 @@ def _handle_callback(cb: Dict[str, Any]):
             f"❓ <b>{q_obj['question']}</b>\n\n"
             f"<i>Обирай правильний варіант нижче! Кожен гість заробляє власні бали в загальний рейтинг 🏆</i>"
         )
-        _safe_edit(chat_id, message_id, txt, build_quiz_kb(q_obj["id"]))
+        _safe_edit(chat_id, message_id, txt, build_quiz_kb(q_obj["id"], is_private=is_private))
         tg_api("answerCallbackQuery", {"callback_query_id": cb_id})
 
     elif data.startswith("quiz:ans:"):
@@ -941,40 +1039,59 @@ def _handle_callback(cb: Dict[str, Any]):
         q_obj = next((q for q in QUIZ_QUESTIONS if q["id"] == qid), QUIZ_QUESTIONS[0])
         is_ok = sel_idx == q_obj["correct_index"]
 
-        u_quiz = state.setdefault("quiz_answers", {}).setdefault(
-            user_id, {"name": full_name, "username": username, "answers": {}}
-        )
-        u_quiz["name"] = full_name
-        u_quiz["username"] = username
-        ans_map = u_quiz.setdefault("answers", {})
+        already_answered = False
+        prev_ok = False
+        with _state_lock:
+            u_quiz = state.setdefault("quiz_answers", {}).setdefault(
+                user_id, {"name": full_name, "username": username, "answers": {}}
+            )
+            u_quiz["name"] = full_name
+            u_quiz["username"] = username
+            ans_map = u_quiz.setdefault("answers", {})
+            if str(qid) in ans_map:
+                already_answered = True
+                prev_ok = ans_map[str(qid)].get("ok", False)
+            else:
+                ans_map[str(qid)] = {"sel": sel_idx, "ok": is_ok}
+            user_answered_count = len(ans_map)
+            user_score = sum(1 for v in ans_map.values() if v.get("ok"))
+            unanswered_after = [q["id"] for q in QUIZ_QUESTIONS if q["id"] > qid and str(q["id"]) not in ans_map]
+            unanswered_before = [q["id"] for q in QUIZ_QUESTIONS if q["id"] < qid and str(q["id"]) not in ans_map]
 
-        if str(qid) in ans_map:
-            prev_ok = ans_map[str(qid)].get("ok")
+        total_q = len(QUIZ_QUESTIONS)
+        progress_line = f"\n\n📊 Твій прогрес: {user_answered_count}/{total_q} (Балів: {user_score})"
+
+        if already_answered:
             prefix = "✅ Ти вже відповідав(ла) правильно!" if prev_ok else "ℹ️ Ти вже відповідав(ла) на це питання!"
-            alert_text = f"{prefix}\n\n💡 {q_obj['explanation']}"
+            alert_text = f"{prefix}\n{q_obj['explanation']}{progress_line}"
         else:
-            ans_map[str(qid)] = {"sel": sel_idx, "ok": is_ok}
             save_state()
             if is_ok:
-                alert_text = f"🎉 Правильно! (+1 бал)\n\n{q_obj['explanation']}"
+                alert_text = f"🎉 Правильно! (+1 бал)\n{q_obj['explanation']}{progress_line}"
             else:
                 corr_txt = q_obj["options"][q_obj["correct_index"]]
-                alert_text = f"🙈 Майже!\nПравильна відповідь: {corr_txt}\n\n{q_obj['explanation']}"
+                alert_text = f"🙈 Майже! Правильно: {corr_txt}\n{q_obj['explanation']}{progress_line}"
 
         tg_api(
             "answerCallbackQuery",
             {"callback_query_id": cb_id, "text": alert_text[:200], "show_alert": True},
         )
 
-        next_qid = qid + 1
-        if any(q["id"] == next_qid for q in QUIZ_QUESTIONS):
+        # Pick next question: first unanswered after current, then wrap around to unanswered before current
+        next_qid = None
+        if unanswered_after:
+            next_qid = unanswered_after[0]
+        elif unanswered_before:
+            next_qid = unanswered_before[0]
+
+        if next_qid is not None:
             nq = next(q for q in QUIZ_QUESTIONS if q["id"] == next_qid)
             txt = (
-                f"👶 <b>Святкова вікторина про Алісу!</b> (Питання {nq['id']} із {len(QUIZ_QUESTIONS)})\n\n"
+                f"👶 <b>Святкова вікторина про Алісу!</b> (Питання {nq['id']} із {total_q})\n\n"
                 f"❓ <b>{nq['question']}</b>\n\n"
                 f"<i>Обирай правильний варіант нижче! Кожен гість заробляє власні бали в загальний рейтинг 🏆</i>"
             )
-            _safe_edit(chat_id, message_id, txt, build_quiz_kb(next_qid))
+            _safe_edit(chat_id, message_id, txt, build_quiz_kb(next_qid, is_private=is_private))
         else:
             _safe_edit(chat_id, message_id, format_leaderboard(state), build_leaders_kb())
 
@@ -982,7 +1099,7 @@ def _handle_callback(cb: Dict[str, Any]):
         _safe_edit(chat_id, message_id, format_leaderboard(state), build_leaders_kb())
         tg_api("answerCallbackQuery", {"callback_query_id": cb_id})
 
-    elif data == "admin:panel":
+    elif data == "admin:panel" and is_admin_private:
         txt = (
             "⚙️ <b>Панель організатора (Хмарний режим 24/7)</b>\n\n"
             f"📅 <b>Дата:</b> {escape(settings.get('event_date', ''))}\n"
@@ -997,7 +1114,7 @@ def _handle_callback(cb: Dict[str, Any]):
         _safe_edit(chat_id, message_id, txt, build_admin_kb())
         tg_api("answerCallbackQuery", {"callback_query_id": cb_id})
 
-    elif data == "admin:test_welcome":
+    elif data == "admin:test_welcome" and is_admin_private:
         tg_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": "Симулюю вхід гостя в групу! 🎉"})
         mention = f'<a href="tg://user?id={user_id}">{escape(user.get("first_name", "Гість"))}</a>'
         w_text = format_welcome_text([mention], settings)
@@ -1014,14 +1131,16 @@ def _handle_callback(cb: Dict[str, Any]):
             },
         )
 
-    elif data == "admin:send_all_stickers":
+    elif data == "admin:send_all_stickers" and is_admin_private:
         tg_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": "Надсилаю всі 10 стікерів Аліси! 🎨"})
         for i in range(1, 11):
             send_alisa_sticker(chat_id, sticker_num=i)
             time.sleep(0.2)
 
-    elif data == "admin:reset_quiz":
-        state["quiz_answers"] = {}
+    elif data == "admin:reset_quiz" and is_admin_private:
+        with _state_lock:
+            state["quiz_answers"] = {}
+            state["quiz_reset_ts"] = time.time()
         save_state()
         tg_api(
             "answerCallbackQuery",
