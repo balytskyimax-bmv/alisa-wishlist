@@ -34,8 +34,9 @@ DEFAULT_SETTINGS = {
     "location_name": "с. Гора, вул. Басейна, 22 (чекаємо у нас вдома! 🏡)",
     "location_url": "https://www.google.com/maps/search/?api=1&query=%D1%81.+%D0%93%D0%BE%D1%80%D0%B0,+%D0%B2%D1%83%D0%BB.+%D0%91%D0%B0%D1%81%D0%B5%D0%B9%D0%BD%D0%B0,+22",
     "dress_code": (
-        "👕 <b>Вільний та максимально зручний!</b>\n\n"
-        "Одягайтеся так, щоб було комфортно:\n"
+        "👕 <b>Вільний та максимально зручний!</b>\n"
+        "У нас досить тепло в будинку, тому рекомендуємо взяти з собою футболку або одразу одягнутися легко\n\n"
+        "Щоб було комфортно:\n"
         "• танцювати та брати участь у конкурсах 💃🕺\n"
         "• смажити найсмачніший шашлик 🍢🔥\n"
         "• співати під гітару та тепло спілкуватися 🎸🥂\n"
@@ -205,16 +206,6 @@ def get_state(force_sync: bool = False) -> Dict[str, Any]:
         if _cached_state is None or (force_sync and now - _last_cloud_sync > 2.0):
             remote = _fetch_cloud_state()
             if remote:
-                # Merge defaults so new keys in DEFAULT_SETTINGS always exist
-                merged_settings = dict(DEFAULT_SETTINGS)
-                merged_settings.update(remote.get("settings", {}))
-                # Always keep the latest event_date/location/dress_code from DEFAULT_SETTINGS if old placeholder was there
-                if "Уточнюється" in merged_settings.get("event_date", ""):
-                    merged_settings["event_date"] = DEFAULT_SETTINGS["event_date"]
-                    merged_settings["event_time"] = DEFAULT_SETTINGS["event_time"]
-                    merged_settings["location_name"] = DEFAULT_SETTINGS["location_name"]
-                    merged_settings["location_url"] = DEFAULT_SETTINGS["location_url"]
-                remote["settings"] = merged_settings
                 _cached_state = remote
                 _last_cloud_sync = now
             elif _cached_state is None:
@@ -226,6 +217,17 @@ def get_state(force_sync: bool = False) -> Dict[str, Any]:
                         _cached_state = _default_state()
                 else:
                     _cached_state = _default_state()
+
+            merged_settings = dict(DEFAULT_SETTINGS)
+            merged_settings.update(_cached_state.get("settings", {}))
+            merged_settings["dress_code"] = DEFAULT_SETTINGS["dress_code"]
+            merged_settings["full_invitation_text"] = DEFAULT_SETTINGS["full_invitation_text"]
+            if "Уточнюється" in merged_settings.get("event_date", ""):
+                merged_settings["event_date"] = DEFAULT_SETTINGS["event_date"]
+                merged_settings["event_time"] = DEFAULT_SETTINGS["event_time"]
+                merged_settings["location_name"] = DEFAULT_SETTINGS["location_name"]
+                merged_settings["location_url"] = DEFAULT_SETTINGS["location_url"]
+            _cached_state["settings"] = merged_settings
         return _cached_state
 
 
@@ -635,12 +637,47 @@ def _flush_welcome_group(chat_id: int):
     )
 
 
+_welcomed_groups = set()
+
+
+def _send_group_initial_invite(chat_id: int):
+    if chat_id in _welcomed_groups:
+        return
+    _welcomed_groups.add(chat_id)
+    state = get_state(force_sync=True)
+    settings = state["settings"]
+    kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False)
+    send_alisa_sticker(chat_id, sticker_num=9)
+    res = tg_api(
+        "sendMessage",
+        {
+            "chat_id": chat_id,
+            "text": settings.get("full_invitation_text", ""),
+            "parse_mode": "HTML",
+            "reply_markup": kb,
+            "disable_web_page_preview": True,
+        },
+    )
+    if res.get("ok"):
+        msg_id = res["result"].get("message_id")
+        if msg_id:
+            tg_api("pinChatMessage", {"chat_id": chat_id, "message_id": msg_id, "disable_notification": True})
+
+
 def handle_update(update: Dict[str, Any]):
     try:
         if "message" in update:
             _handle_message(update["message"])
         elif "callback_query" in update:
             _handle_callback(update["callback_query"])
+        elif "my_chat_member" in update:
+            mcm = update["my_chat_member"]
+            chat = mcm.get("chat", {})
+            if chat.get("type") in ("group", "supergroup"):
+                old_status = mcm.get("old_chat_member", {}).get("status", "left")
+                new_status = mcm.get("new_chat_member", {}).get("status", "")
+                if old_status in ("left", "kicked") and new_status in ("member", "administrator"):
+                    _send_group_initial_invite(chat.get("id"))
     except Exception as e:
         print(f"[BOT ERROR] handle_update exception: {e}", flush=True)
 
@@ -652,16 +689,25 @@ def _handle_message(msg: Dict[str, Any]):
     is_private = chat_type == "private"
     from_user = msg.get("from", {})
     user_id = from_user.get("id", ADMIN_ID)
+    is_admin_private = is_private and (str(user_id) == str(ADMIN_ID))
 
-    # 1. Check new_chat_members
+    # 1. Check new_chat_members (or group_chat_created)
     new_members = msg.get("new_chat_members", [])
-    if new_members:
+    if new_members or msg.get("group_chat_created") or msg.get("supergroup_chat_created"):
+        bot_was_added = bool(msg.get("group_chat_created") or msg.get("supergroup_chat_created"))
         mentions = []
         for u in new_members:
             if u.get("is_bot"):
+                if u.get("id") == 9158824262 or "alisabirthday" in (u.get("username") or "").lower():
+                    bot_was_added = True
                 continue
             fname = escape(u.get("first_name") or "Гість")
             mentions.append(f'<a href="tg://user?id={u.get("id")}">{fname}</a>')
+
+        if bot_was_added and not mentions:
+            _send_group_initial_invite(chat_id)
+            return
+
         if mentions:
             with _welcome_lock:
                 _welcome_buffers.setdefault(chat_id, []).extend(mentions)
@@ -693,8 +739,8 @@ def _handle_message(msg: Dict[str, Any]):
             print(f"[BOT WARN] Sticker pack publish skipped: {e}", flush=True)
 
     if cmd in ("/start", "/menu"):
-        reply_text = format_main_menu(settings, is_private=is_private)
-        kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=is_private)
+        reply_text = format_main_menu(settings, is_private=is_admin_private)
+        kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=is_admin_private)
         tg_api(
             "sendMessage",
             {
@@ -707,7 +753,8 @@ def _handle_message(msg: Dict[str, Any]):
         )
     elif cmd == "/invite":
         kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False)
-        tg_api(
+        send_alisa_sticker(chat_id, sticker_num=9)
+        res = tg_api(
             "sendMessage",
             {
                 "chat_id": chat_id,
@@ -717,6 +764,10 @@ def _handle_message(msg: Dict[str, Any]):
                 "disable_web_page_preview": True,
             },
         )
+        if not is_private and res.get("ok"):
+            msg_id = res["result"].get("message_id")
+            if msg_id:
+                tg_api("pinChatMessage", {"chat_id": chat_id, "message_id": msg_id, "disable_notification": True})
     elif cmd == "/test_welcome":
         fname = escape(from_user.get("first_name") or "Гість")
         mention = f'<a href="tg://user?id={user_id}">{fname}</a>'
@@ -747,22 +798,22 @@ def _handle_message(msg: Dict[str, Any]):
                 "chat_id": chat_id,
                 "text": msg_txt,
                 "parse_mode": "HTML",
-                "reply_markup": build_main_menu_kb(pack_url, is_private=is_private),
+                "reply_markup": build_main_menu_kb(pack_url, is_private=is_admin_private),
             },
         )
-    elif cmd == "/set_date" and arg:
+    elif cmd == "/set_date" and arg and str(user_id) == str(ADMIN_ID):
         settings["event_date"] = arg
         save_state()
         tg_api("sendMessage", {"chat_id": chat_id, "text": f"✅ Дату оновлено: <b>{escape(arg)}</b>", "parse_mode": "HTML"})
-    elif cmd == "/set_time" and arg:
+    elif cmd == "/set_time" and arg and str(user_id) == str(ADMIN_ID):
         settings["event_time"] = arg
         save_state()
         tg_api("sendMessage", {"chat_id": chat_id, "text": f"✅ Час оновлено: <b>{escape(arg)}</b>", "parse_mode": "HTML"})
-    elif cmd == "/set_location" and arg:
+    elif cmd == "/set_location" and arg and str(user_id) == str(ADMIN_ID):
         settings["location_name"] = arg
         save_state()
         tg_api("sendMessage", {"chat_id": chat_id, "text": f"✅ Локацію оновлено: <b>{escape(arg)}</b>", "parse_mode": "HTML"})
-    elif cmd == "/reset_quiz":
+    elif cmd == "/reset_quiz" and str(user_id) == str(ADMIN_ID):
         state["quiz_answers"] = {}
         save_state()
         tg_api("sendMessage", {"chat_id": chat_id, "text": "🔄 Усі тестові бали вікторини очищено!", "parse_mode": "HTML"})
@@ -803,6 +854,7 @@ def _handle_callback(cb: Dict[str, Any]):
     is_private = chat.get("type") == "private"
     user = cb.get("from", {})
     user_id = str(user.get("id", ""))
+    is_admin_private = is_private and (user_id == str(ADMIN_ID))
     full_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() or "Гість"
     username = user.get("username", "")
 
@@ -813,8 +865,8 @@ def _handle_callback(cb: Dict[str, Any]):
         _safe_edit(
             chat_id,
             message_id,
-            format_main_menu(settings, is_private=is_private),
-            build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=is_private),
+            format_main_menu(settings, is_private=is_admin_private),
+            build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=is_admin_private),
         )
         tg_api("answerCallbackQuery", {"callback_query_id": cb_id})
 
@@ -1000,7 +1052,7 @@ def start_cloud_bot_services():
                 "setWebhook",
                 {
                     "url": webhook_url,
-                    "allowed_updates": ["message", "callback_query", "chat_member"],
+                    "allowed_updates": ["message", "callback_query", "chat_member", "my_chat_member"],
                     "drop_pending_updates": False,
                 },
             )
