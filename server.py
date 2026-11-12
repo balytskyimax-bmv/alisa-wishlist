@@ -309,14 +309,24 @@ class WishlistHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": "Подарунок не знайдено"}).encode("utf-8"))
 
+        elif parsed.path == "/api/telegram-webhook":
+            import party_bot_cloud
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b'{"ok":true}')
+            threading.Thread(target=party_bot_cloud.handle_update, args=(data,), daemon=True).start()
+
         else:
             self.send_response(404)
             self.end_headers()
 
 if __name__ == "__main__":
+    import party_bot_cloud
+    party_bot_cloud.start_cloud_bot_services()
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("", PORT), WishlistHandler) as httpd:
-        print(f"Wishlist server is running at http://localhost:{PORT}")
+        print(f"Wishlist & Alisa Party Bot server is running at http://localhost:{PORT}")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
