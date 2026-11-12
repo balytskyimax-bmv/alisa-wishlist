@@ -412,14 +412,14 @@ def ensure_sticker_pack_published(owner_id: int = ADMIN_ID) -> str:
     return ""
 
 
-def send_alisa_sticker(chat_id: int, sticker_num: Optional[int] = None):
+def send_alisa_sticker(chat_id: int, sticker_num: Optional[int] = None) -> Optional[int]:
     state = get_state()
     file_ids = state.get("stickers", [])
     if file_ids:
         fid = file_ids[(sticker_num - 1) % len(file_ids)] if sticker_num else random.choice(file_ids)
         res = tg_api("sendSticker", {"chat_id": chat_id, "sticker": fid})
         if res.get("ok"):
-            return
+            return res.get("result", {}).get("message_id")
 
     # Fallback: upload local .webp directly
     idx = ((sticker_num - 1) % 10 + 1) if sticker_num else random.randint(1, 10)
@@ -427,11 +427,14 @@ def send_alisa_sticker(chat_id: int, sticker_num: Optional[int] = None):
     if os.path.exists(webp_path):
         with open(webp_path, "rb") as f:
             fbytes = f.read()
-        tg_multipart(
+        res = tg_multipart(
             "sendSticker",
             fields={"chat_id": str(chat_id)},
             files={"sticker": (f"sticker_{idx:02d}.webp", fbytes, "image/webp")},
         )
+        if res.get("ok"):
+            return res.get("result", {}).get("message_id")
+    return None
 
 
 # --- Keyboards & Formatting ---
@@ -664,12 +667,44 @@ def format_leaderboard(state: Dict[str, Any]) -> str:
 
 # --- Update Processing ---
 
-_sticker_rr_idx = 0
 _welcome_send_lock = threading.Lock()
+_group_last_msgs: Dict[int, Dict[str, Optional[int]]] = {}  # chat_id -> {"sticker_id": int, "msg_id": int}
+_welcomed_groups = set()
+
+
+def _post_or_refresh_single_group_invite(chat_id: int):
+    """
+    Ensures there is ALWAYS ONLY ONE invitation message from the bot in the group chat.
+    Deletes any previous bot sticker/message before posting the fresh single invitation.
+    """
+    with _welcome_send_lock:
+        prev = _group_last_msgs.get(chat_id, {})
+        for old_key in ("sticker_id", "msg_id"):
+            old_mid = prev.get(old_key)
+            if old_mid:
+                tg_api("deleteMessage", {"chat_id": chat_id, "message_id": old_mid})
+
+        state = get_state(force_sync=True)
+        settings = state["settings"]
+        kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False)
+        st_id = send_alisa_sticker(chat_id, sticker_num=9)
+        res = tg_api(
+            "sendMessage",
+            {
+                "chat_id": chat_id,
+                "text": settings.get("full_invitation_text", ""),
+                "parse_mode": "HTML",
+                "reply_markup": kb,
+                "disable_web_page_preview": True,
+            },
+        )
+        msg_id = res.get("result", {}).get("message_id") if res.get("ok") else None
+        _group_last_msgs[chat_id] = {"sticker_id": st_id, "msg_id": msg_id}
+        if msg_id:
+            tg_api("pinChatMessage", {"chat_id": chat_id, "message_id": msg_id, "disable_notification": True})
 
 
 def _queue_guest_welcome(chat_id: int, user_obj: Dict[str, Any]):
-    global _sticker_rr_idx
     if user_obj.get("is_bot"):
         return
     uid = user_obj.get("id")
@@ -678,59 +713,26 @@ def _queue_guest_welcome(chat_id: int, user_obj: Dict[str, Any]):
         if key in _welcomed_user_keys:
             return
         _welcomed_user_keys.add(key)
-        _sticker_rr_idx = (_sticker_rr_idx % 10) + 1
-        assigned_sticker = _sticker_rr_idx
-
-    fname = escape(user_obj.get("first_name") or "Гість")
-    mention = f'<a href="tg://user?id={uid}">{fname}</a>'
-
-    def _send_individual_welcome():
-        with _welcome_send_lock:
-            state = get_state()
-            settings = state["settings"]
-            text = format_welcome_text([mention], settings)
-            kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False)
-            send_alisa_sticker(chat_id, sticker_num=assigned_sticker)
-            tg_api(
-                "sendMessage",
-                {
-                    "chat_id": chat_id,
-                    "text": text,
-                    "parse_mode": "HTML",
-                    "reply_markup": kb,
-                    "disable_web_page_preview": True,
-                },
-            )
-            time.sleep(0.35)
-
-    threading.Thread(target=_send_individual_welcome, daemon=True).start()
+        # Debounce 1.5s so adding 15 guests at once triggers only a single clean refresh
+        if chat_id in _welcome_timers:
+            _welcome_timers[chat_id].cancel()
+        t = threading.Timer(1.5, _flush_single_group_invite, args=[chat_id])
+        t.daemon = True
+        _welcome_timers[chat_id] = t
+        t.start()
 
 
-_welcomed_groups = set()
+def _flush_single_group_invite(chat_id: int):
+    with _welcome_lock:
+        _welcome_timers.pop(chat_id, None)
+    _post_or_refresh_single_group_invite(chat_id)
 
 
 def _send_group_initial_invite(chat_id: int):
     if chat_id in _welcomed_groups:
         return
     _welcomed_groups.add(chat_id)
-    state = get_state(force_sync=True)
-    settings = state["settings"]
-    kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False)
-    send_alisa_sticker(chat_id, sticker_num=9)
-    res = tg_api(
-        "sendMessage",
-        {
-            "chat_id": chat_id,
-            "text": settings.get("full_invitation_text", ""),
-            "parse_mode": "HTML",
-            "reply_markup": kb,
-            "disable_web_page_preview": True,
-        },
-    )
-    if res.get("ok"):
-        msg_id = res["result"].get("message_id")
-        if msg_id:
-            tg_api("pinChatMessage", {"chat_id": chat_id, "message_id": msg_id, "disable_notification": True})
+    _post_or_refresh_single_group_invite(chat_id)
 
 
 def handle_update(update: Dict[str, Any]):
@@ -830,6 +832,9 @@ def _handle_message(msg: Dict[str, Any]):
             )
             return
 
+        if not is_private:
+            _post_or_refresh_single_group_invite(chat_id)
+            return
         reply_text = format_main_menu(settings, is_private=is_admin_private)
         kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=is_admin_private)
         tg_api(
@@ -843,9 +848,12 @@ def _handle_message(msg: Dict[str, Any]):
             },
         )
     elif cmd == "/invite":
+        if not is_private:
+            _post_or_refresh_single_group_invite(chat_id)
+            return
         kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False)
         send_alisa_sticker(chat_id, sticker_num=9)
-        res = tg_api(
+        tg_api(
             "sendMessage",
             {
                 "chat_id": chat_id,
@@ -855,10 +863,6 @@ def _handle_message(msg: Dict[str, Any]):
                 "disable_web_page_preview": True,
             },
         )
-        if not is_private and res.get("ok"):
-            msg_id = res["result"].get("message_id")
-            if msg_id:
-                tg_api("pinChatMessage", {"chat_id": chat_id, "message_id": msg_id, "disable_notification": True})
     elif cmd == "/test_welcome":
         fname = escape(from_user.get("first_name") or "Гість")
         mention = f'<a href="tg://user?id={user_id}">{fname}</a>'
