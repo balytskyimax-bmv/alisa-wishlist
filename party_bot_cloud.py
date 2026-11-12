@@ -687,7 +687,7 @@ def _post_or_refresh_single_group_invite(chat_id: int):
         state = get_state(force_sync=True)
         settings = state["settings"]
         kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False)
-        st_id = send_alisa_sticker(chat_id, sticker_num=9)
+        st_id = send_alisa_sticker(chat_id, sticker_num=3)
         res = tg_api(
             "sendMessage",
             {
@@ -852,7 +852,7 @@ def _handle_message(msg: Dict[str, Any]):
             _post_or_refresh_single_group_invite(chat_id)
             return
         kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False)
-        send_alisa_sticker(chat_id, sticker_num=9)
+        send_alisa_sticker(chat_id, sticker_num=3)
         tg_api(
             "sendMessage",
             {
@@ -868,7 +868,7 @@ def _handle_message(msg: Dict[str, Any]):
         mention = f'<a href="tg://user?id={user_id}">{fname}</a>'
         w_text = format_welcome_text([mention], settings)
         kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False)
-        send_alisa_sticker(chat_id)
+        send_alisa_sticker(chat_id, sticker_num=3)
         tg_api(
             "sendMessage",
             {
@@ -1122,7 +1122,7 @@ def _handle_callback(cb: Dict[str, Any]):
         mention = f'<a href="tg://user?id={user_id}">{escape(user.get("first_name", "Гість"))}</a>'
         w_text = format_welcome_text([mention], settings)
         kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False)
-        send_alisa_sticker(chat_id)
+        send_alisa_sticker(chat_id, sticker_num=3)
         tg_api(
             "sendMessage",
             {
