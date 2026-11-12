@@ -664,7 +664,12 @@ def format_leaderboard(state: Dict[str, Any]) -> str:
 
 # --- Update Processing ---
 
+_sticker_rr_idx = 0
+_welcome_send_lock = threading.Lock()
+
+
 def _queue_guest_welcome(chat_id: int, user_obj: Dict[str, Any]):
+    global _sticker_rr_idx
     if user_obj.get("is_bot"):
         return
     uid = user_obj.get("id")
@@ -673,38 +678,32 @@ def _queue_guest_welcome(chat_id: int, user_obj: Dict[str, Any]):
         if key in _welcomed_user_keys:
             return
         _welcomed_user_keys.add(key)
-        fname = escape(user_obj.get("first_name") or "Гість")
-        mention = f'<a href="tg://user?id={uid}">{fname}</a>'
-        _welcome_buffers.setdefault(chat_id, []).append(mention)
-        if chat_id not in _welcome_timers:
-            t = threading.Timer(1.5, _flush_welcome_group, args=[chat_id])
-            t.daemon = True
-            _welcome_timers[chat_id] = t
-            t.start()
+        _sticker_rr_idx = (_sticker_rr_idx % 10) + 1
+        assigned_sticker = _sticker_rr_idx
 
+    fname = escape(user_obj.get("first_name") or "Гість")
+    mention = f'<a href="tg://user?id={uid}">{fname}</a>'
 
-def _flush_welcome_group(chat_id: int):
-    with _welcome_lock:
-        mentions = _welcome_buffers.pop(chat_id, [])
-        _welcome_timers.pop(chat_id, None)
-    if not mentions:
-        return
-    unique_mentions = list(dict.fromkeys(mentions))
-    state = get_state()
-    settings = state["settings"]
-    text = format_welcome_text(unique_mentions, settings)
-    kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False)
-    send_alisa_sticker(chat_id)
-    tg_api(
-        "sendMessage",
-        {
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": "HTML",
-            "reply_markup": kb,
-            "disable_web_page_preview": True,
-        },
-    )
+    def _send_individual_welcome():
+        with _welcome_send_lock:
+            state = get_state()
+            settings = state["settings"]
+            text = format_welcome_text([mention], settings)
+            kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False)
+            send_alisa_sticker(chat_id, sticker_num=assigned_sticker)
+            tg_api(
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": text,
+                    "parse_mode": "HTML",
+                    "reply_markup": kb,
+                    "disable_web_page_preview": True,
+                },
+            )
+            time.sleep(0.35)
+
+    threading.Thread(target=_send_individual_welcome, daemon=True).start()
 
 
 _welcomed_groups = set()
