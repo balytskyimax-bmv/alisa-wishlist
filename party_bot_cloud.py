@@ -440,23 +440,32 @@ def send_alisa_sticker(chat_id: int, sticker_num: Optional[int] = None) -> Optio
 # --- Keyboards & Formatting ---
 
 def build_main_menu_kb(sticker_pack_url: str = "", is_private: bool = False) -> Dict[str, Any]:
+    quiz_btn = (
+        {"text": "👶 Вікторина (7 питань)", "callback_data": "quiz:view:1"}
+        if is_private
+        else {"text": "👶 Вікторина (7 питань)", "url": "https://t.me/AlisaBirthdaybbot?start=quiz"}
+    )
     rows = [
         [
             {"text": "📍 Де і коли? (21.11)", "callback_data": "nav:where"},
             {"text": "👗 Дрес-код", "callback_data": "nav:dress"},
         ],
         [
-            {"text": "💌 Повний текст запрошення", "callback_data": "nav:invite"},
+            {"text": "🗺 Відкрити локацію на Google Картах", "url": DEFAULT_SETTINGS["location_url"]},
         ],
         [
             {"text": "🎁 Вішліст Аліси (Обрати подарунок)", "url": WISHLIST_URL},
         ],
         [
-            {"text": "👶 Вікторина (7 питань)", "callback_data": "quiz:view:1"},
+            quiz_btn,
             {"text": "🏆 Рейтинг", "callback_data": "nav:leaders"},
         ],
         [
-            {"text": "✅ Хто буде? (Відмітитись)", "callback_data": "nav:rsvp"},
+            {"text": "🥳 Я буду! (Відмітитись)", "callback_data": "rsvp:going"},
+            {"text": "🤔 Ще думаю", "callback_data": "rsvp:maybe"},
+        ],
+        [
+            {"text": "📋 Список гостей (Хто буде?)", "callback_data": "nav:rsvp"},
         ],
     ]
     if sticker_pack_url:
@@ -665,6 +674,57 @@ def format_leaderboard(state: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def format_group_invite_with_rsvp(state: Dict[str, Any]) -> str:
+    base_txt = state["settings"].get("full_invitation_text", "")
+    rsvp_map = state.get("rsvp", {})
+    going = [info.get("name", "Гість") for info in rsvp_map.values() if info.get("status") == "going"]
+    maybe = [info.get("name", "Гість") for info in rsvp_map.values() if info.get("status") == "maybe"]
+    extra = []
+    if going:
+        names = ", ".join(escape(n) for n in going)
+        extra.append(f"🥳 <b>Вже відмітились, що будуть ({len(going)}):</b> {names}")
+    if maybe:
+        names = ", ".join(escape(n) for n in maybe)
+        extra.append(f"🤔 <b>Ще уточнюють ({len(maybe)}):</b> {names}")
+    if extra:
+        return base_txt + "\n\n" + "\n".join(extra)
+    return base_txt
+
+
+def format_popup_leaders(state: Dict[str, Any]) -> str:
+    q_map = state.get("quiz_answers", {})
+    total_q = len(QUIZ_QUESTIONS)
+    leaders = []
+    for uid, udata in q_map.items():
+        ans = udata.get("answers", {})
+        if not ans:
+            continue
+        score = sum(1 for v in ans.values() if v.get("ok"))
+        leaders.append((udata.get("name", "Гість"), score, len(ans)))
+    leaders.sort(key=lambda x: (-x[1], x[2]))
+    if not leaders:
+        return "🏆 Рейтинг вікторини:\nПоки ніхто не завершив вікторину!\nНатискай «👶 Вікторина (7 питань)» і будь першим!"
+    lines = ["🏆 Рейтинг знавців Аліси:"]
+    medals = ["🥇", "🥈", "🥉"]
+    for idx, (name, score, ans_cnt) in enumerate(leaders[:6]):
+        m = medals[idx] if idx < 3 else f"{idx + 1}."
+        lines.append(f"{m} {name[:14]}: {score}/{total_q} (відп: {ans_cnt}/{total_q})")
+    return "\n".join(lines)[:198]
+
+
+def format_popup_rsvp(state: Dict[str, Any], prefix: str = "") -> str:
+    rsvp_map = state.get("rsvp", {})
+    going = [info.get("name", "Гість") for info in rsvp_map.values() if info.get("status") == "going"]
+    maybe = [info.get("name", "Гість") for info in rsvp_map.values() if info.get("status") == "maybe"]
+    lines = []
+    if prefix:
+        lines.append(prefix)
+    lines.append(f"🥳 Будуть ({len(going)}): " + (", ".join(going) if going else "поки ніхто"))
+    if maybe:
+        lines.append(f"🤔 Думають ({len(maybe)}): " + ", ".join(maybe))
+    return "\n".join(lines)[:198]
+
+
 # --- Update Processing ---
 
 _welcome_send_lock = threading.Lock()
@@ -692,7 +752,7 @@ def _post_or_refresh_single_group_invite(chat_id: int):
             "sendMessage",
             {
                 "chat_id": chat_id,
-                "text": settings.get("full_invitation_text", ""),
+                "text": format_group_invite_with_rsvp(state),
                 "parse_mode": "HTML",
                 "reply_markup": kb,
                 "disable_web_page_preview": True,
@@ -815,9 +875,22 @@ def _handle_message(msg: Dict[str, Any]):
 
     if cmd in ("/start", "/menu"):
         if arg.lower() == "quiz":
-            q_obj = QUIZ_QUESTIONS[0]
+            u_ans = state.get("quiz_answers", {}).get(str(user_id), {}).get("answers", {})
+            unanswered = [q for q in QUIZ_QUESTIONS if str(q["id"]) not in u_ans]
+            if not unanswered:
+                tg_api(
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": format_leaderboard(state),
+                        "parse_mode": "HTML",
+                        "reply_markup": build_leaders_kb(),
+                    },
+                )
+                return
+            q_obj = unanswered[0]
             txt = (
-                f"👶 <b>Святкова вікторина про Алісу!</b> (Питання 1 із {len(QUIZ_QUESTIONS)})\n\n"
+                f"👶 <b>Святкова вікторина про Алісу!</b> (Питання {q_obj['id']} із {len(QUIZ_QUESTIONS)})\n\n"
                 f"❓ <b>{q_obj['question']}</b>\n\n"
                 f"<i>Обирай правильний варіант нижче! Усі твої бали автоматично додаються у спільний рейтинг гостей 🏆</i>"
             )
@@ -827,7 +900,7 @@ def _handle_message(msg: Dict[str, Any]):
                     "chat_id": chat_id,
                     "text": txt,
                     "parse_mode": "HTML",
-                    "reply_markup": build_quiz_kb(1, is_private=is_private),
+                    "reply_markup": build_quiz_kb(q_obj["id"], is_private=is_private),
                 },
             )
             return
@@ -962,6 +1035,15 @@ def _handle_callback(cb: Dict[str, Any]):
     settings = state["settings"]
 
     if data == "nav:main":
+        if not is_private:
+            _safe_edit(
+                chat_id,
+                message_id,
+                format_group_invite_with_rsvp(state),
+                build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False),
+            )
+            tg_api("answerCallbackQuery", {"callback_query_id": cb_id})
+            return
         _safe_edit(
             chat_id,
             message_id,
@@ -971,6 +1053,23 @@ def _handle_callback(cb: Dict[str, Any]):
         tg_api("answerCallbackQuery", {"callback_query_id": cb_id})
 
     elif data == "nav:where":
+        if not is_private:
+            popup = (
+                "📍 Деталі зустрічі:\n"
+                "📅 Коли: 21 листопада (субота)\n"
+                "⏰ Час: з 16:30 до 17:00\n"
+                "🏡 Де: с. Гора, вул. Басейна, 22\n\n"
+                "🎸 У програмі: конкурси, гітара, шашлик!\n"
+                "(ДН 17.11, святкуємо 21.11 🎂)"
+            )
+            tg_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": popup[:198], "show_alert": True})
+            _safe_edit(
+                chat_id,
+                message_id,
+                format_group_invite_with_rsvp(state),
+                build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False),
+            )
+            return
         _safe_edit(
             chat_id,
             message_id,
@@ -980,6 +1079,22 @@ def _handle_callback(cb: Dict[str, Any]):
         tg_api("answerCallbackQuery", {"callback_query_id": cb_id})
 
     elif data == "nav:dress":
+        if not is_private:
+            popup = (
+                "👗 Дрес-код свята:\n"
+                "👕 Вільний та максимально зручний! У будинку тепло — радьмо взяти футболку.\n\n"
+                "• танці та конкурси 💃\n"
+                "• смаження шашлику 🍢\n"
+                "• співи під гітару та фото з Алісою 🎸📸"
+            )
+            tg_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": popup[:198], "show_alert": True})
+            _safe_edit(
+                chat_id,
+                message_id,
+                format_group_invite_with_rsvp(state),
+                build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False),
+            )
+            return
         _safe_edit(
             chat_id,
             message_id,
@@ -989,6 +1104,15 @@ def _handle_callback(cb: Dict[str, Any]):
         tg_api("answerCallbackQuery", {"callback_query_id": cb_id})
 
     elif data == "nav:invite":
+        if not is_private:
+            _safe_edit(
+                chat_id,
+                message_id,
+                format_group_invite_with_rsvp(state),
+                build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False),
+            )
+            tg_api("answerCallbackQuery", {"callback_query_id": cb_id})
+            return
         _safe_edit(
             chat_id,
             message_id,
@@ -998,6 +1122,16 @@ def _handle_callback(cb: Dict[str, Any]):
         tg_api("answerCallbackQuery", {"callback_query_id": cb_id})
 
     elif data == "nav:rsvp":
+        if not is_private:
+            popup = format_popup_rsvp(state, prefix="📋 Список гостей на 21.11:")
+            tg_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": popup[:198], "show_alert": True})
+            _safe_edit(
+                chat_id,
+                message_id,
+                format_group_invite_with_rsvp(state),
+                build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False),
+            )
+            return
         _safe_edit(chat_id, message_id, format_rsvp(state), build_rsvp_kb())
         tg_api("answerCallbackQuery", {"callback_query_id": cb_id})
 
@@ -1011,13 +1145,23 @@ def _handle_callback(cb: Dict[str, Any]):
                 "ts": time.time(),
             }
         save_state()
-        _safe_edit(chat_id, message_id, format_rsvp(state), build_rsvp_kb())
-        toast = {
+        toast_prefix = {
             "going": "🥳 Ура! Записали тебе до списку гостей!",
             "maybe": "🤔 Добре! Сподіваємось, усе вийде!",
             "cant": "😢 Дуже шкода! Дякуємо, що попередив(ла)!",
         }.get(status, "✅ Збережено!")
-        tg_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": toast})
+        if not is_private:
+            popup = format_popup_rsvp(state, prefix=toast_prefix)
+            tg_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": popup[:198], "show_alert": True})
+            _safe_edit(
+                chat_id,
+                message_id,
+                format_group_invite_with_rsvp(state),
+                build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False),
+            )
+            return
+        _safe_edit(chat_id, message_id, format_rsvp(state), build_rsvp_kb())
+        tg_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": toast_prefix})
 
     elif data == "nav:stickers":
         pack_url = settings.get("sticker_pack_url") or ensure_sticker_pack_published(int(user_id or ADMIN_ID))
@@ -1099,6 +1243,16 @@ def _handle_callback(cb: Dict[str, Any]):
             _safe_edit(chat_id, message_id, format_leaderboard(state), build_leaders_kb())
 
     elif data == "nav:leaders":
+        if not is_private:
+            popup = format_popup_leaders(state)
+            tg_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": popup[:198], "show_alert": True})
+            _safe_edit(
+                chat_id,
+                message_id,
+                format_group_invite_with_rsvp(state),
+                build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=False),
+            )
+            return
         _safe_edit(chat_id, message_id, format_leaderboard(state), build_leaders_kb())
         tg_api("answerCallbackQuery", {"callback_query_id": cb_id})
 
