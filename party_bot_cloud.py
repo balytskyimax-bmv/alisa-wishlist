@@ -146,9 +146,10 @@ def escape(text: Any) -> str:
 def _default_state() -> Dict[str, Any]:
     return {
         "settings": dict(DEFAULT_SETTINGS),
-        "rsvp": {},          # str(user_id): {"name": str, "username": str, "status": str, "ts": float}
-        "quiz_answers": {},  # str(user_id): {"name": str, "username": str, "answers": {str(q_id): {"sel": int, "ok": bool}}}
-        "stickers": [],      # list of file_ids
+        "rsvp": {},              # str(user_id): {"name": str, "username": str, "status": str, "ts": float}
+        "quiz_answers": {},      # str(user_id): {"name": str, "username": str, "answers": {str(q_id): {"sel": int, "ok": bool}}}
+        "quiz_reset_users": {},  # str(user_id): float(timestamp)
+        "stickers": [],          # list of file_ids
     }
 
 
@@ -200,6 +201,11 @@ def _merge_states(base: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, A
             rsvp_out[uid] = b_entry
     merged["rsvp"] = rsvp_out
 
+    # Reset users tracking: merge reset timestamps
+    merged_reset_users = dict(base.get("quiz_reset_users", {}))
+    merged_reset_users.update(incoming.get("quiz_reset_users", {}))
+    merged["quiz_reset_users"] = merged_reset_users
+
     # Quiz answers: union of all answered questions per user_id (unless explicitly reset)
     if base.get("quiz_reset_ts", 0) > incoming.get("quiz_reset_ts", 0):
         merged["quiz_reset_ts"] = base["quiz_reset_ts"]
@@ -208,6 +214,10 @@ def _merge_states(base: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, A
         merged["quiz_reset_ts"] = incoming.get("quiz_reset_ts", 0)
         q_out = copy_dict(incoming.get("quiz_answers", {}))
         for uid, b_u in base.get("quiz_answers", {}).items():
+            if uid in merged_reset_users:
+                b_ts = b_u.get("ts", 0)
+                if b_ts <= merged_reset_users[uid]:
+                    continue
             if uid not in q_out:
                 q_out[uid] = copy_dict(b_u)
             else:
@@ -217,6 +227,13 @@ def _merge_states(base: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, A
                 for qid, a_val in b_u.get("answers", {}).items():
                     if qid not in ans_dest:
                         ans_dest[qid] = a_val
+
+    # Remove any reset user from final dict if their answers were reset
+    for uid, r_ts in merged_reset_users.items():
+        if uid in q_out:
+            if q_out[uid].get("ts", 0) <= r_ts:
+                q_out.pop(uid, None)
+
     merged["quiz_answers"] = q_out
     return merged
 
@@ -545,9 +562,9 @@ def build_leaders_kb() -> Dict[str, Any]:
 def build_admin_kb() -> Dict[str, Any]:
     return {
         "inline_keyboard": [
-            [{"text": "🎉 Симулювати вхід гостя в чат", "callback_data": "admin:test_welcome"}],
             [{"text": "🎨 Перевірити всі 10 стікерів", "callback_data": "admin:send_all_stickers"}],
-            [{"text": "🔄 Скинути бали вікторини", "callback_data": "admin:reset_quiz"}],
+            [{"text": "👤 Скинути 1 учасника вікторини", "callback_data": "admin:pick_reset_user"}],
+            [{"text": "🔄 Скинути бали ВСІХ учасників", "callback_data": "admin:reset_quiz"}],
             [{"text": "⬅️ Назад у головне меню", "callback_data": "nav:main"}],
         ]
     }
@@ -764,28 +781,43 @@ def _post_or_refresh_single_group_invite(chat_id: int):
             tg_api("pinChatMessage", {"chat_id": chat_id, "message_id": msg_id, "disable_notification": True})
 
 
-def _queue_guest_welcome(chat_id: int, user_obj: Dict[str, Any]):
-    if user_obj.get("is_bot"):
+def _welcome_guest_privately_only(chat_id: int, user_obj: Dict[str, Any]):
+    """
+    Welcomes a newly added guest ONLY in their private chat (DM with the bot)
+    without posting anything to the group chat or repinning messages.
+    """
+    if not user_obj or user_obj.get("is_bot"):
         return
     uid = user_obj.get("id")
+    if not uid:
+        return
+
     key = (chat_id, uid)
     with _welcome_lock:
         if key in _welcomed_user_keys:
             return
         _welcomed_user_keys.add(key)
-        # Debounce 1.5s so adding 15 guests at once triggers only a single clean refresh
-        if chat_id in _welcome_timers:
-            _welcome_timers[chat_id].cancel()
-        t = threading.Timer(1.5, _flush_single_group_invite, args=[chat_id])
-        t.daemon = True
-        _welcome_timers[chat_id] = t
-        t.start()
 
+    state = get_state()
+    settings = state["settings"]
+    kb = build_main_menu_kb(settings.get("sticker_pack_url", ""), is_private=True)
+    first_name = user_obj.get("first_name") or "Гість"
 
-def _flush_single_group_invite(chat_id: int):
-    with _welcome_lock:
-        _welcome_timers.pop(chat_id, None)
-    _post_or_refresh_single_group_invite(chat_id)
+    # Send official sticker and full personal invitation directly to the user's private chat
+    send_alisa_sticker(uid, sticker_num=3)
+    tg_api(
+        "sendMessage",
+        {
+            "chat_id": uid,
+            "text": (
+                f"Привіт, <b>{escape(first_name)}</b>! 🎉\n\n"
+                f"{settings.get('full_invitation_text')}"
+            ),
+            "parse_mode": "HTML",
+            "reply_markup": kb,
+            "disable_web_page_preview": True,
+        },
+    )
 
 
 def _send_group_initial_invite(chat_id: int):
@@ -819,7 +851,7 @@ def handle_update(update: Dict[str, Any]):
                 if old_status in ("left", "kicked") and new_status in ("member", "administrator"):
                     u = new_member.get("user", {})
                     if u and not u.get("is_bot"):
-                        _queue_guest_welcome(chat.get("id"), u)
+                        _welcome_guest_privately_only(chat.get("id"), u)
     except Exception as e:
         print(f"[BOT ERROR] handle_update exception: {e}", flush=True)
 
@@ -832,6 +864,12 @@ def _handle_message(msg: Dict[str, Any]):
     from_user = msg.get("from", {})
     user_id = from_user.get("id", ADMIN_ID)
     is_admin_private = is_private and (str(user_id) == str(ADMIN_ID))
+
+    # Auto-delete service join/leave messages in groups to prevent chat clutter and notification spam
+    if (msg.get("new_chat_members") or msg.get("left_chat_member")) and chat_type in ("group", "supergroup"):
+        mid = msg.get("message_id")
+        if mid:
+            tg_api("deleteMessage", {"chat_id": chat_id, "message_id": mid})
 
     # 1. Check new_chat_members (or group_chat_created)
     new_members = msg.get("new_chat_members", [])
@@ -850,7 +888,7 @@ def _handle_message(msg: Dict[str, Any]):
             return
 
         for u in human_users:
-            _queue_guest_welcome(chat_id, u)
+            _welcome_guest_privately_only(chat_id, u)
         return
 
     text = (msg.get("text") or "").strip()
@@ -873,7 +911,7 @@ def _handle_message(msg: Dict[str, Any]):
         except Exception as e:
             print(f"[BOT WARN] Sticker pack publish skipped: {e}", flush=True)
 
-    if cmd in ("/start", "/menu"):
+    if cmd in ("/start", "/menu", "/refresh"):
         if arg.lower() == "quiz":
             u_ans = state.get("quiz_answers", {}).get(str(user_id), {}).get("answers", {})
             unanswered = [q for q in QUIZ_QUESTIONS if str(q["id"]) not in u_ans]
@@ -984,6 +1022,42 @@ def _handle_message(msg: Dict[str, Any]):
             settings["location_name"] = arg
         save_state()
         tg_api("sendMessage", {"chat_id": chat_id, "text": f"✅ Локацію оновлено: <b>{escape(arg)}</b>", "parse_mode": "HTML"})
+    elif cmd in ("/reset_user", "/reset_guest") and arg and str(user_id) == str(ADMIN_ID):
+        target_query = arg.strip().lower().lstrip("@")
+        state = get_state(force_sync=True)
+        q_answers = state.get("quiz_answers", {})
+        found_uid = None
+        found_name = None
+        for uid, u_data in list(q_answers.items()):
+            u_name = (u_data.get("name") or "").lower()
+            u_uname = (u_data.get("username") or "").lower()
+            if target_query == uid or target_query in u_name or target_query == u_uname:
+                found_uid = uid
+                found_name = u_data.get("name") or u_data.get("username") or uid
+                break
+
+        if found_uid:
+            with _state_lock:
+                q_answers.pop(found_uid, None)
+                state.setdefault("quiz_reset_users", {})[found_uid] = time.time()
+            save_state()
+            tg_api(
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": f"✅ Відповіді вікторини для <b>{escape(found_name)}</b> успішно скинуто! Вона може пройти її заново з 1-го питання.",
+                    "parse_mode": "HTML",
+                },
+            )
+        else:
+            tg_api(
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": f"⚠️ Учасника <b>{escape(arg)}</b> не знайдено серед тих, хто здав відповіді у вікторині.",
+                    "parse_mode": "HTML",
+                },
+            )
     elif cmd == "/reset_quiz" and str(user_id) == str(ADMIN_ID):
         with _state_lock:
             state["quiz_answers"] = {}
@@ -1189,11 +1263,14 @@ def _handle_callback(cb: Dict[str, Any]):
         already_answered = False
         prev_ok = False
         with _state_lock:
+            if "quiz_reset_users" in state and user_id in state["quiz_reset_users"]:
+                state["quiz_reset_users"].pop(user_id, None)
             u_quiz = state.setdefault("quiz_answers", {}).setdefault(
-                user_id, {"name": full_name, "username": username, "answers": {}}
+                user_id, {"name": full_name, "username": username, "answers": {}, "ts": time.time()}
             )
             u_quiz["name"] = full_name
             u_quiz["username"] = username
+            u_quiz["ts"] = time.time()
             ans_map = u_quiz.setdefault("answers", {})
             if str(qid) in ans_map:
                 already_answered = True
@@ -1302,6 +1379,41 @@ def _handle_callback(cb: Dict[str, Any]):
         tg_api(
             "answerCallbackQuery",
             {"callback_query_id": cb_id, "text": "✅ Таблицю лідерів вікторини очищено!", "show_alert": True},
+        )
+
+    elif data == "admin:pick_reset_user" and is_admin_private:
+        state = get_state(force_sync=True)
+        q_answers = state.get("quiz_answers", {})
+        if not q_answers:
+            tg_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": "У вікторині ще немає відповідей!"})
+            return
+        btn_rows = []
+        for uid, u_info in q_answers.items():
+            display = u_info.get("name") or u_info.get("username") or f"Гість {uid}"
+            score = sum(1 for a in u_info.get("answers", {}).values() if a.get("ok"))
+            btn_rows.append([{"text": f"❌ {display} ({score}/7)", "callback_data": f"admin:do_reset_user:{uid}"}])
+        btn_rows.append([{"text": "⬅️ Назад до адмінки", "callback_data": "nav:admin"}])
+        _safe_edit(
+            chat_id,
+            message_id,
+            "👤 <b>Оберіть учасника, відповіді якого потрібно анулювати:</b>\n"
+            "<i>(Учасник зможе пройти вікторину заново з 1-го питання)</i>",
+            {"inline_keyboard": btn_rows},
+        )
+
+    elif data.startswith("admin:do_reset_user:") and is_admin_private:
+        target_uid = data.split(":", 2)[2]
+        with _state_lock:
+            user_info = state.get("quiz_answers", {}).pop(target_uid, None)
+            state.setdefault("quiz_reset_users", {})[target_uid] = time.time()
+        save_state()
+        u_name = user_info.get("name") if user_info else target_uid
+        tg_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": f"Відповіді {u_name} скинуто!"})
+        _safe_edit(
+            chat_id,
+            message_id,
+            f"✅ Відповіді для <b>{escape(u_name)}</b> успішно анульовано!\n\nТепер вона/він може зайти у вікторину та пройти її знову з 1-го питання.",
+            {"inline_keyboard": [[{"text": "⬅️ Повернутися до адмінки", "callback_data": "nav:admin"}]]},
         )
 
 

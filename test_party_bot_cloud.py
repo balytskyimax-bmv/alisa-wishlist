@@ -117,6 +117,72 @@ class TestPartyBotCloud(unittest.TestCase):
         self.assertNotIn("admin:panel", kb_json)
         self.assertNotIn("admin:test_welcome", kb_json)
 
+    @patch("party_bot_cloud.tg_api")
+    def test_new_member_auto_deletes_service_msg_and_keeps_group_quiet(self, mock_tg):
+        mock_tg.return_value = {"ok": True, "result": {"message_id": 999}}
+
+        # Guest joins group
+        pbc.handle_update({
+            "message": {
+                "message_id": 777,
+                "chat": {"id": -100999, "type": "supergroup"},
+                "new_chat_members": [{"id": 555111, "first_name": "Іван", "is_bot": False}],
+            }
+        })
+
+        # 1. Check that service message 777 was deleted from group -100999
+        delete_calls = [c for c in mock_tg.call_args_list if c[0][0] == "deleteMessage"]
+        self.assertTrue(any(c[0][1]["chat_id"] == -100999 and c[0][1]["message_id"] == 777 for c in delete_calls))
+
+        # 2. Check that NO sendMessage was sent to the group chat -100999
+        send_calls_group = [c for c in mock_tg.call_args_list if c[0][0] == "sendMessage" and c[0][1].get("chat_id") == -100999]
+        self.assertEqual(len(send_calls_group), 0, "Group chat must not receive any welcome spam!")
+
+        # 3. Check that welcome message was directed to the user's private chat
+        send_calls_user = [c for c in mock_tg.call_args_list if c[0][0] == "sendMessage" and c[0][1].get("chat_id") == 555111]
+        self.assertEqual(len(send_calls_user), 1, "User should receive a private welcome message!")
+
+    @patch("party_bot_cloud.tg_api")
+    @patch("party_bot_cloud._push_cloud_state_async")
+    def test_reset_user_quiz_command_and_merge(self, mock_push, mock_tg):
+        mock_tg.return_value = {"ok": True, "result": {"message_id": 102}}
+
+        state = pbc.get_state()
+        state["quiz_answers"]["7386906127"] = {
+            "name": "Svitlana",
+            "username": "",
+            "answers": {"1": {"sel": 1, "ok": True}},
+        }
+        state["quiz_answers"]["356753494"] = {
+            "name": "Iryna Koziaryk",
+            "username": "iryna_kozyarik",
+            "answers": {"1": {"sel": 1, "ok": True}},
+        }
+
+        # Admin runs /reset_user Svitlana
+        pbc.handle_update({
+            "message": {
+                "message_id": 10,
+                "from": {"id": pbc.ADMIN_ID},
+                "chat": {"id": pbc.ADMIN_ID, "type": "private"},
+                "text": "/reset_user Svitlana",
+            }
+        })
+
+        self.assertNotIn("7386906127", state["quiz_answers"])
+        self.assertIn("356753494", state["quiz_answers"])
+        self.assertIn("7386906127", state.get("quiz_reset_users", {}))
+
+        # Simulate state merge with an older state that still had Svitlana
+        st_old = pbc._default_state()
+        st_old["quiz_answers"]["7386906127"] = {
+            "name": "Svitlana",
+            "username": "",
+            "answers": {"1": {"sel": 1, "ok": True}},
+        }
+        merged = pbc._merge_states(st_old, state)
+        self.assertNotIn("7386906127", merged["quiz_answers"], "Reset user must not be revived by state merge!")
+
 
 if __name__ == "__main__":
     unittest.main()
