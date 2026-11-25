@@ -181,6 +181,11 @@ class WishlistHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             gifts = load_gifts(force_sync=True)
             self.wfile.write(json.dumps({"success": True, "gifts": gifts}, ensure_ascii=False).encode("utf-8"))
+        elif parsed.path == "/health":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b'{"status":"ok","services":["wishlist","party_bot","family_budget_bot","dtek_bot"]}')
         elif parsed.path == "/" or parsed.path == "":
             self.path = "/index.html"
             return super().do_GET()
@@ -321,12 +326,41 @@ class WishlistHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+def start_family_bots_daemon():
+    """Starts the Family Budget Bot & DTEK Light Bot supervisor in a background worker."""
+    import subprocess
+    import sys
+
+    family_bots_dir = os.path.join(BASE_DIR, "family_bots")
+    bot_script = os.path.join(family_bots_dir, "bot.py")
+    if not os.path.exists(bot_script):
+        print(f"[SUPERVISOR] family_bots/bot.py not found at {bot_script}")
+        return
+
+    def _worker():
+        while True:
+            try:
+                print("[SUPERVISOR] Starting Family Budget Bot & DTEK Bot...")
+                env = os.environ.copy()
+                env["PORT"] = "0"  # Prevent bot.py from conflicting with main HTTP server port
+                proc = subprocess.Popen([sys.executable, bot_script], cwd=family_bots_dir, env=env)
+                rc = proc.wait()
+                print(f"[SUPERVISOR] Bots process exited with code {rc}. Restarting in 10s...")
+            except Exception as e:
+                print(f"[SUPERVISOR] Error in family bots supervisor: {e}")
+            time.sleep(10)
+
+    t = threading.Thread(target=_worker, daemon=True, name="FamilyBotsSupervisor")
+    t.start()
+
+
 if __name__ == "__main__":
     import party_bot_cloud
     party_bot_cloud.start_cloud_bot_services()
+    start_family_bots_daemon()
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("", PORT), WishlistHandler) as httpd:
-        print(f"Wishlist & Alisa Party Bot server is running at http://localhost:{PORT}")
+        print(f"Wishlist & Alisa Party Bot & Family Bots server is running at http://localhost:{PORT}")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

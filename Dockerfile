@@ -2,11 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy all application files
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -r requirements.txt
+
 COPY . /app
 
-# Hugging Face Spaces listens on port 7860 by default
-ENV PORT=7860
-EXPOSE 7860
+ENV PORT=8000
+EXPOSE 8000
 
 CMD ["python3", "server.py"]
