@@ -172,6 +172,8 @@ async def broadcast_schedule(
 async def monitoring_loop() -> None:
     """Background task to poll DTEK and broadcast updates."""
     logger.info("Starting background DTEK monitoring loop...")
+    is_initial_check = True
+
     while True:
         try:
             # Check if topic needs to be created
@@ -192,18 +194,30 @@ async def monitoring_loop() -> None:
                     stored = await get_stored_schedule(date_str)
 
                     if not stored:
-                        # New day discovered!
-                        alert_type = "new_tomorrow" if s.get("is_tomorrow") else "normal"
-                        logger.info(f"New schedule detected for {date_str} (alert: {alert_type})")
-                        ok = await broadcast_schedule(
-                            s,
-                            updated_str=updated_str,
-                            alert_type=alert_type,
-                            tomorrow_schedule=tomorrow_s if s.get("is_today") else None
-                        )
-                        if ok:
+                        # On initial boot: silently record existing today's schedule without broadcasting
+                        if is_initial_check and s.get("is_today"):
+                            logger.info(f"Initial boot: silently recording schedule for {date_str}")
                             sent_at = datetime.now(KYIV_TZ).isoformat()
                             await save_sent_schedule(date_str, curr_hash, str(s["raw_hours"]), sent_at)
+                            continue
+
+                        # Only broadcast if it is tomorrow newly discovered or after initial boot
+                        if s.get("is_tomorrow") or not is_initial_check:
+                            alert_type = "new_tomorrow" if s.get("is_tomorrow") else "normal"
+                            logger.info(f"New schedule detected for {date_str} (alert: {alert_type})")
+                            ok = await broadcast_schedule(
+                                s,
+                                updated_str=updated_str,
+                                alert_type=alert_type,
+                                tomorrow_schedule=tomorrow_s if s.get("is_today") else None
+                            )
+                            if ok:
+                                sent_at = datetime.now(KYIV_TZ).isoformat()
+                                await save_sent_schedule(date_str, curr_hash, str(s["raw_hours"]), sent_at)
+                        else:
+                            sent_at = datetime.now(KYIV_TZ).isoformat()
+                            await save_sent_schedule(date_str, curr_hash, str(s["raw_hours"]), sent_at)
+
                     elif stored["hash"] != curr_hash:
                         # Schedule was modified by DTEK!
                         logger.info(f"Schedule for {date_str} has been modified by DTEK!")
@@ -219,6 +233,8 @@ async def monitoring_loop() -> None:
                     else:
                         # Unchanged
                         pass
+
+                is_initial_check = False
         except Exception as e:
             logger.error(f"Exception in monitoring_loop: {e}", exc_info=True)
 
@@ -515,7 +531,14 @@ async def main() -> None:
 
     logger.info("Starting Telegram bot polling...")
     try:
-        await dp.start_polling(bot)
+        while True:
+            try:
+                await dp.start_polling(bot)
+            except Exception as poll_err:
+                logger.warning(f"DTEK bot polling error: {poll_err}. Waiting 30s before retry...")
+                await asyncio.sleep(30)
+            else:
+                break
     finally:
         monitor_task.cancel()
         if web_runner:

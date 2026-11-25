@@ -20,8 +20,8 @@ TARGET_REGION = os.getenv("TARGET_REGION", "kyiv-region").strip()
 TARGET_GROUP = os.getenv("TARGET_GROUP", "GPV5.1").strip()
 LOCATION_NAME = os.getenv("LOCATION_NAME", "с. Гора, вул. Басейна, 20").strip()
 
-# Polling Interval
-CHECK_INTERVAL_SECONDS = int(os.getenv("CHECK_INTERVAL_SECONDS", "600"))
+# Polling Interval (every 30 mins)
+CHECK_INTERVAL_SECONDS = int(os.getenv("CHECK_INTERVAL_SECONDS", "1800"))
 
 # Visual Options
 SEND_IMAGE_WITH_ALERT = os.getenv("SEND_IMAGE_WITH_ALERT", "true").lower() in ("true", "1", "yes")
