@@ -1,3 +1,13 @@
+---
+title: Alisa Wishlist
+emoji: 🎂
+colorFrom: pink
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # 🎂 Вішліст на 1 рочок для Алісоньки ✨
 
 Сучасний, теплий та інтерактивний веб-сайт вішліста для першого дня народження маленької Алісоньки.
