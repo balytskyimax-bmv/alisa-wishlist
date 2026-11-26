@@ -80,6 +80,38 @@
     "wishes": ""
   },
   {
+    "id": "glibbo-barbienot-mini",
+    "title": "Дитячі barefoot-кросівки Glibbo BarbieNot Mini (OSIK)",
+    "category": "Одяг та взуття",
+    "price": "3 599 грн",
+    "url": "https://osik.store/products/glibbo-barbienot-mini?variant=58033528078600",
+    "note": "👟 Потрібний розмір: 23, колір: BarbieNot. Анатомічний носок, гнучка підошва з нульовим перепадом та італійська замша.",
+    "images": [
+      "/images/glibbo-barbienot_1.jpg",
+      "/images/glibbo-barbienot_2.jpg"
+    ],
+    "reserved": false,
+    "reservedBy": "",
+    "reservedAt": null,
+    "wishes": ""
+  },
+  {
+    "id": "topper-marshmallow-mini",
+    "title": "Зимові мембранні barefoot-кеди Topper Marshmallow Mini (OSIK)",
+    "category": "Одяг та взуття",
+    "price": "4 290 грн",
+    "url": "https://osik.store/products/topper-marshmallow-mini?variant=59282331238664",
+    "note": "❄️ Потрібний розмір: 22. Зимові barefoot-кеди з мембраною Winterfrost та шкірою флотар (захист від води та холоду).",
+    "images": [
+      "/images/topper-marshmallow_1.jpg",
+      "/images/topper-marshmallow_2.jpg"
+    ],
+    "reserved": false,
+    "reservedBy": "",
+    "reservedAt": null,
+    "wishes": ""
+  },
+  {
     "id": "lyalka-vendela",
     "title": "Лялька Vendela 30 см (Bukowski Design)",
     "category": "Ляльки та пупси",
